@@ -1,0 +1,261 @@
+{% extends "admin_dashboard/base.html" %}
+{% load static %}
+
+{% block title %}Invite Reviewers - {{ cycle.reviewee.name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;">Invite Reviewers</h1>
+    <p style="color: var(--text-secondary);">{{ cycle.reviewee.name }} - {{ cycle.questionnaire.name }}</p>
+</div>
+
+{% if total_tokens > 0 %}
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+        <h2 class="card-title">Invitation Status</h2>
+    </div>
+    <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+            <div>
+                <div style="font-size: 0.875rem; color: var(--text-secondary);">Invited</div>
+                <div style="font-size: 2rem; font-weight: 700; color: var(--text-primary);">{{ assigned_tokens }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.875rem; color: var(--text-secondary);">Emails Sent</div>
+                <div style="font-size: 2rem; font-weight: 700; color: var(--success);">{{ sent_tokens }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.875rem; color: var(--text-secondary);">Completed</div>
+                <div style="font-size: 2rem; font-weight: 700; color: var(--insight-perception);">{{ completed_tokens }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+        <h2 class="card-title">Invite Reviewers by Email</h2>
+    </div>
+    <div class="card-body">
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+            Enter email addresses for each reviewer category. The system will generate anonymous tokens and send invitations. Separate multiple emails with commas or newlines.
+        </p>
+
+        <form method="post" action="{% url 'assign_invitations' cycle.uuid %}" id="inviteForm">
+            {% csrf_token %}
+
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label class="form-label">Self Assessment</label>
+                {% if not user.profile.can_create_cycles_for_others %}
+                <input
+                    type="text"
+                    name="self_emails"
+                    class="form-control"
+                    value="{{ user.email }}"
+                    readonly
+                    style="background: var(--bg-light); cursor: not-allowed;"
+                >
+                <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    Your email is automatically assigned for self-assessment
+                </div>
+                {% else %}
+                <textarea
+                    name="self_emails"
+                    class="form-control"
+                    rows="2"
+                    placeholder="{{ cycle.reviewee.email }}"
+                ></textarea>
+                <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    Usually the reviewee's own email
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label class="form-label">Manager/Supervisor</label>
+                <textarea
+                    name="manager_emails"
+                    class="form-control"
+                    rows="2"
+                    placeholder="manager@example.com"
+                ></textarea>
+                <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    Direct manager or supervisor
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label class="form-label">Peers</label>
+                <textarea
+                    name="peer_emails"
+                    class="form-control"
+                    rows="3"
+                    placeholder="peer1@example.com, peer2@example.com&#10;peer3@example.com"
+                ></textarea>
+                <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    Colleagues at the same level
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label class="form-label">Direct Reports</label>
+                <textarea
+                    name="direct_report_emails"
+                    class="form-control"
+                    rows="3"
+                    placeholder="report1@example.com, report2@example.com"
+                ></textarea>
+                <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    People who report to this reviewee
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                <button type="submit" name="action" value="assign" class="btn btn-primary">
+                    Save & Send Invitations
+                </button>
+                <button type="submit" name="action" value="assign_only" class="btn btn-secondary">
+                    Save Without Sending
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if total_tokens > 0 %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Reviewer Response Status</h2>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info" style="margin-bottom: 1.5rem;">
+            <strong>Privacy Notice</strong>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem;">
+                Email addresses are never displayed to protect reviewer anonymity. Only response status is shown.
+            </p>
+        </div>
+
+        {% for category, tokens in tokens_by_category.items %}
+        {% if tokens %}
+        <div style="margin-bottom: 2rem;">
+            <h3 style="font-weight: 600; margin-bottom: 1rem;">{{ category }}</h3>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border);">
+                            <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Reviewer</th>
+                            <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Invitation Status</th>
+                            <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Response Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for token in tokens %}
+                        <tr style="border-bottom: 1px solid var(--border);" data-email="{{ token.reviewer_email|default:'' }}">
+                            <td style="padding: 0.75rem;" class="reviewer-col">
+                                {% if token.reviewer_email %}
+                                <span style="color: var(--success); font-weight: 500;">✓ Invited by email</span>
+                                {% elif token.claimed_at or token.completed_at %}
+                                <span style="color: var(--text-secondary);">Via invite link</span>
+                                {% else %}
+                                <span style="color: var(--text-secondary);">Awaiting claim</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.75rem;">
+                                {% if token.invitation_sent_at %}
+                                <span style="color: var(--success);">Sent {{ token.invitation_sent_at|date:"M d, Y" }}</span>
+                                {% elif token.reviewer_email %}
+                                <span style="color: var(--text-secondary);">Ready to send</span>
+                                {% else %}
+                                <span style="color: var(--text-secondary);">—</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.75rem;">
+                                {% if token.completed_at %}
+                                <span style="color: var(--insight-perception); font-weight: 500;">✓ Completed {{ token.completed_at|date:"M d, Y" }}</span>
+                                {% elif token.claimed_at %}
+                                <span style="color: var(--warning); font-weight: 500;">In Progress</span>
+                                {% elif token.invitation_sent_at %}
+                                <div>
+                                    <span style="color: var(--text-secondary);">Pending</span>
+                                    {% if token.last_reminder_sent_at %}
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                        Reminder sent {{ token.last_reminder_sent_at|date:"M d, Y" }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <span style="color: var(--text-secondary);">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+{% if assigned_tokens > sent_tokens %}
+<div class="card" style="margin-top: 2rem;">
+    <div class="card-body">
+        <form method="post" action="{% url 'send_invitations' cycle.uuid %}" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+            {% csrf_token %}
+            <div>
+                <div style="font-weight: 600; margin-bottom: 0.25rem;">{{ assigned_tokens|add:"-"|add:sent_tokens }} pending invitation{{ assigned_tokens|add:"-"|add:sent_tokens|pluralize }}</div>
+                <div style="font-size: 0.875rem; color: var(--text-secondary);">Send email invitations to reviewers who haven't received one yet</div>
+            </div>
+            <button type="submit" class="btn btn-primary">Send Pending Invitations</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+<script>
+// Mask email addresses to show partial info: first char + **** + last char before @
+function maskEmail(email) {
+    if (!email) return '';
+
+    const atIndex = email.indexOf('@');
+    if (atIndex <= 0) return email;
+
+    const localPart = email.substring(0, atIndex);
+    const domain = email.substring(atIndex);
+
+    if (localPart.length <= 2) {
+        return localPart[0] + '****' + domain;
+    }
+
+    return localPart[0] + '****' + localPart[localPart.length - 1] + domain;
+}
+
+// Update reviewer column to show masked emails for assigned but not sent tokens
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('tr[data-email]').forEach(row => {
+        const email = row.getAttribute('data-email');
+        const reviewerCol = row.querySelector('.reviewer-col');
+
+        if (email && reviewerCol) {
+            const span = reviewerCol.querySelector('span');
+            // Check if invitation was sent by looking at the invitation status column
+            const invitationStatus = row.children[1].textContent.trim();
+            const hasSent = invitationStatus.includes('Sent');
+
+            if (!hasSent) {
+                // Show masked email for pending invitations
+                const maskedEmail = maskEmail(email);
+                span.innerHTML = `<span style="color: var(--text-secondary); font-family: monospace; font-size: 0.875rem;">${maskedEmail}</span>`;
+            }
+        }
+    });
+});
+</script>
+
+<div style="margin-top: 2rem;">
+    <a href="{% url 'review_cycle_detail' cycle.uuid %}" class="btn btn-secondary">Back to Cycle Details</a>
+</div>
+{% endblock %}

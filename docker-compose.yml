@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      # PostgreSQL expects POSTGRES_* variables
+      - POSTGRES_DB=${DATABASE_NAME:-blik}
+      - POSTGRES_USER=${DATABASE_USER:-blik}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-blik}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  web:
+    build: .
+    command: sh -c "gunicorn --bind 0.0.0.0:$${PORT:-8000} --workers 3 --timeout 120 blik.wsgi:application"
+    volumes:
+      - ./:/app
+      - static_volume:/app/staticfiles
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    environment:
+      - DATABASE_TYPE=postgres
+      - DATABASE_HOST=${DATABASE_HOST:-db}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_NAME=${DATABASE_NAME:-blik}
+      - DATABASE_USER=${DATABASE_USER:-blik}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-changeme}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - PORT=${PORT:-8000}
+      - SECRET_KEY=_^%5)g9u-ruti=ukblm3osv=2v7d*iiqe0fn-f%5hdsfsldf
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  static_volume:

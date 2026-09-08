@@ -1,0 +1,2894 @@
+"""
+Admin dashboard views for Blik
+"""
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse
+from django.template.loader import render_to_string
+from django.contrib import messages
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db import transaction
+from django.db.models import Count, Q, Max
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+from django.urls import reverse
+from django.http import HttpResponseRedirect
+from datetime import timedelta
+
+from accounts.models import Reviewee, UserProfile, OrganizationInvitation
+from accounts.permissions import can_view_all_reports, visible_cycles
+from reviews.models import ReviewCycle, ReviewerToken
+from reviews.services import assign_tokens_to_emails, send_reviewer_invitations
+from questionnaires.models import Questionnaire
+from reports.models import Report
+from core.models import Organization
+from core.gdpr import GDPRDeletionService
+from core.env_config import env_managed_fields
+
+import logging
+logger = logging.getLogger(__name__)
+
+
+def get_cycle_or_404(request, cycle_uuid):
+    """
+    Get a ReviewCycle by UUID, filtered by organization and by what the current
+    user is allowed to see. Returns 404 for cycles in another organization or
+    belonging to another reviewee.
+    """
+    cycles_qs = ReviewCycle.objects.select_related('reviewee', 'questionnaire', 'created_by')
+    if request.organization:
+        cycles_qs = cycles_qs.filter(reviewee__organization=request.organization)
+    return get_object_or_404(visible_cycles(request.user, cycles_qs), uuid=cycle_uuid)
+
+
+@login_required
+def dashboard(request):
+    """Admin dashboard homepage"""
+    from subscriptions.utils import get_subscription_status
+
+    org = request.organization
+
+    # Get statistics filtered by organization
+    reviewees_qs = Reviewee.objects.for_organization(org).filter(is_active=True)
+    cycles_qs = visible_cycles(
+        request.user,
+        ReviewCycle.objects.for_organization(org).select_related('reviewee', 'questionnaire')
+    )
+
+    total_reviewees = reviewees_qs.count()
+    active_cycles = cycles_qs.filter(status='active').count()
+    completed_cycles = cycles_qs.filter(status='completed').count()
+
+    # Get subscription status
+    subscription_status = get_subscription_status(org) if org else None
+
+    # Recent activity
+    recent_cycles = cycles_qs.all()[:5]
+
+    # Pending reviews (tokens not completed)
+    pending_tokens = ReviewerToken.objects.filter(
+        cycle__in=cycles_qs,
+        completed_at__isnull=True,
+        cycle__status='active'
+    ).count()
+
+    # Completion stats for active cycles
+    active_cycles_data = []
+    for cycle in cycles_qs.filter(status='active').select_related('reviewee'):
+        total_tokens = cycle.tokens.count()
+        completed_tokens = cycle.tokens.filter(completed_at__isnull=False).count()
+        completion_rate = (completed_tokens / total_tokens * 100) if total_tokens > 0 else 0
+
+        active_cycles_data.append({
+            'cycle': cycle,
+            'total_tokens': total_tokens,
+            'completed_tokens': completed_tokens,
+            'completion_rate': completion_rate,
+        })
+
+    # Completed cycles with report availability
+    completed_cycles_data = []
+    for cycle in cycles_qs.filter(status='completed').select_related('reviewee').order_by('-created_at')[:10]:
+        # Check if report exists
+        report_exists = Report.objects.filter(cycle=cycle).exists()
+
+        completed_cycles_data.append({
+            'cycle': cycle,
+            'report_exists': report_exists,
+        })
+
+    # Check if user has seen welcome modal
+    has_seen_welcome = False
+    try:
+        has_seen_welcome = request.user.profile.has_seen_welcome
+    except UserProfile.DoesNotExist:
+        pass
+
+    # Check if user has submitted a product review (global, not org-scoped)
+    from productreviews.models import ProductReview
+    user_has_reviewed = ProductReview.objects.filter(
+        reviewer_email=request.user.email,
+        is_active=True
+    ).exists()
+
+    context = {
+        'total_reviewees': total_reviewees,
+        'active_cycles': active_cycles,
+        'completed_cycles': completed_cycles,
+        'pending_tokens': pending_tokens,
+        'recent_cycles': recent_cycles,
+        'active_cycles_data': active_cycles_data,
+        'completed_cycles_data': completed_cycles_data,
+        'subscription_status': subscription_status,
+        'has_seen_welcome': has_seen_welcome,
+        'user_has_reviewed': user_has_reviewed,
+    }
+
+    return render(request, 'admin_dashboard/dashboard.html', context)
+
+
+@login_required
+def team_list(request):
+    """Team management - users and invitations"""
+    from subscriptions.utils import get_subscription_status
+
+    org = request.organization
+
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('admin_dashboard')
+
+    # Get all active (non-anonymized) users in this organization
+    users_qs = UserProfile.objects.for_organization(org).select_related('user').order_by('-user__date_joined')
+
+    # Get per_page from request, default to 25
+    per_page = request.GET.get('per_page', '25')
+    try:
+        per_page = int(per_page)
+        if per_page not in [25, 50, 100]:
+            per_page = 25
+    except (ValueError, TypeError):
+        per_page = 25
+
+    # Paginate users
+    paginator = Paginator(users_qs, per_page)
+    page = request.GET.get('page')
+    try:
+        users = paginator.page(page)
+    except PageNotAnInteger:
+        users = paginator.page(1)
+    except EmptyPage:
+        users = paginator.page(paginator.num_pages)
+
+    # Add permission data as dynamic attribute
+    for user_profile in users:
+        user_profile.is_org_admin = user_profile.user.has_perm('accounts.can_manage_organization')
+
+    # Get pending invitations
+    invitations = OrganizationInvitation.objects.filter(
+        organization=org,
+        accepted_at__isnull=True
+    ).order_by('-created_at')
+
+    # Get subscription status
+    subscription_status = get_subscription_status(org) if org else None
+
+    context = {
+        'users': users,
+        'invitations': invitations,
+        'subscription_status': subscription_status,
+        'per_page': per_page,
+    }
+
+    return render(request, 'admin_dashboard/team.html', context)
+
+
+@login_required
+@require_POST
+def update_user_permissions(request):
+    """Update user permissions and role"""
+    from accounts.permissions import assign_organization_admin, assign_organization_member
+    from django.contrib.auth.models import Group
+
+    # Check if requester has permission to manage organization
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to manage user permissions.')
+        return redirect('team_list')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('admin_dashboard')
+
+    try:
+        user_profile_id = request.POST.get('user_profile_id')
+        role = request.POST.get('role')  # 'admin' or 'member'
+        can_create_cycles_for_others = request.POST.get('can_create_cycles_for_others') == 'on'
+
+        if not user_profile_id or not role:
+            messages.error(request, 'Invalid request: missing required fields.')
+            return redirect('team_list')
+
+        # Get the user profile being updated
+        user_profile = get_object_or_404(
+            UserProfile,
+            id=user_profile_id,
+            organization=org
+        )
+        target_user = user_profile.user
+
+        # Prevent self-demotion or demoting superusers
+        if target_user.id == request.user.id:
+            messages.error(request, 'You cannot modify your own permissions.')
+            return redirect('team_list')
+
+        if target_user.is_superuser:
+            messages.error(request, 'Cannot modify permissions for super admins.')
+            return redirect('team_list')
+
+        # Check if this would be the last admin
+        if target_user.has_perm('accounts.can_manage_organization') and role == 'member':
+            # Count users with organization admin permission
+            admin_profiles = UserProfile.objects.filter(organization=org).select_related('user')
+            admin_count = sum(1 for p in admin_profiles if p.user.has_perm('accounts.can_manage_organization'))
+
+            if admin_count <= 1:
+                messages.error(request, 'Cannot demote the last organization administrator.')
+                return redirect('team_list')
+
+        # Update role and permissions
+        if role == 'admin':
+            assign_organization_admin(target_user)
+            messages.success(request, f'Successfully promoted {target_user.username} to Organization Admin.')
+        else:  # member
+            # Remove admin permissions
+            assign_organization_member(target_user, can_create_cycles_for_others=False)
+            messages.success(request, f'Successfully updated {target_user.username} to Member role.')
+
+        # Update can_create_cycles_for_others permission separately
+        # (this can be set independently of role)
+        user_profile.refresh_from_db()
+        user_profile.can_create_cycles_for_others = can_create_cycles_for_others
+        user_profile.save()
+
+        if can_create_cycles_for_others:
+            messages.success(request, f'{target_user.username} can now create review cycles for others.')
+
+    except Exception as e:
+        messages.error(request, f'Error updating permissions: {str(e)}')
+
+    return redirect('team_list')
+
+
+@login_required
+def reviewee_list(request):
+    """List and manage reviewees"""
+    from subscriptions.utils import get_subscription_status
+    from questionnaires.models import Questionnaire
+
+    org = request.organization
+    # Filter out anonymized reviewees (those with @deleted.invalid emails)
+    reviewees_qs = Reviewee.objects.for_organization(org).filter(is_active=True).annotate(
+        cycle_count=Count('review_cycles')
+    ).order_by('name')
+
+    # Get per_page from request, default to 25
+    per_page = request.GET.get('per_page', '25')
+    try:
+        per_page = int(per_page)
+        if per_page not in [25, 50, 100]:
+            per_page = 25
+    except (ValueError, TypeError):
+        per_page = 25
+
+    # Paginate reviewees
+    paginator = Paginator(reviewees_qs, per_page)
+    page = request.GET.get('page')
+    try:
+        reviewees = paginator.page(page)
+    except PageNotAnInteger:
+        reviewees = paginator.page(1)
+    except EmptyPage:
+        reviewees = paginator.page(paginator.num_pages)
+
+    # Get subscription status
+    subscription_status = get_subscription_status(org) if org else None
+
+    # Get available questionnaires for quick cycle creation
+    questionnaires = Questionnaire.objects.for_organization(org).filter(is_active=True).order_by('-is_default', 'name')
+
+    # Annotate each reviewee with their latest cycle info
+    reviewees_with_latest = []
+    for reviewee in reviewees:
+        latest_cycle = (
+            reviewee.review_cycles
+            .select_related('questionnaire')
+            .prefetch_related('questionnaire__sections__questions')
+            .order_by('-created_at')
+            .first()
+        )
+
+        # Get active cycle
+        active_cycle = reviewee.review_cycles.filter(status='active').order_by('-created_at').first()
+
+        # Get latest completed cycle with a report
+        latest_completed_report = None
+        completed_cycles = reviewee.review_cycles.filter(status='completed').order_by('-created_at')
+        for cycle in completed_cycles:
+            try:
+                report = cycle.report
+                if report.available:
+                    latest_completed_report = report
+                    break
+            except:
+                continue
+
+        reviewees_with_latest.append({
+            'reviewee': reviewee,
+            'latest_questionnaire': latest_cycle.questionnaire if latest_cycle else None,
+            'active_cycle': active_cycle,
+            'latest_completed_report': latest_completed_report,
+        })
+
+    context = {
+        'reviewees_with_latest': reviewees_with_latest,
+        'reviewees': reviewees,  # Paginated object
+        'questionnaires': questionnaires,
+        'subscription_status': subscription_status,
+        'per_page': per_page,
+    }
+
+    return render(request, 'admin_dashboard/reviewee_list.html', context)
+
+
+@login_required
+def reviewee_create(request):
+    """Create a new reviewee"""
+    from subscriptions.utils import check_employee_limit
+    from accounts.permissions import is_organization_admin
+
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        email = request.POST.get('email')
+        department = request.POST.get('department', '')
+
+        if name and email:
+            organization = request.organization or Organization.objects.first()
+            if not organization:
+                messages.error(request, 'No organization found. Please run setup first.')
+                return redirect('admin_dashboard')
+
+            # Non-admins can only create reviewees for themselves
+            if not is_organization_admin(request.user):
+                if email.lower() != request.user.email.lower():
+                    messages.error(request, 'You can only create a reviewee profile for yourself.')
+                    return redirect('reviewee_list')
+
+            # Check employee limit
+            allowed, error_message = check_employee_limit(request)
+            if not allowed:
+                messages.error(request, error_message)
+                return redirect('reviewee_list')
+
+            try:
+                reviewee = Reviewee.objects.create(
+                    organization=organization,
+                    name=name,
+                    email=email,
+                    department=department
+                )
+                messages.success(request, f'Reviewee "{reviewee.name}" created successfully.')
+                return redirect('reviewee_list')
+            except Exception as e:
+                messages.error(request, f'Error creating reviewee: {str(e)}')
+        else:
+            messages.error(request, 'Name and email are required.')
+
+    return render(request, 'admin_dashboard/reviewee_form.html', {'action': 'Create'})
+
+
+@login_required
+def reviewee_edit(request, reviewee_id):
+    """Edit an existing reviewee - admin only"""
+    from accounts.permissions import organization_admin_required
+
+    # Check admin permission
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(
+            request,
+            'You do not have permission to edit reviewees. Only organization administrators can access this feature.'
+        )
+        return redirect('reviewee_list')
+
+    reviewee = get_object_or_404(Reviewee, id=reviewee_id)
+
+    if request.method == 'POST':
+        reviewee.name = request.POST.get('name', reviewee.name)
+        reviewee.email = request.POST.get('email', reviewee.email)
+        reviewee.department = request.POST.get('department', '')
+
+        try:
+            reviewee.save()
+            messages.success(request, f'Reviewee "{reviewee.name}" updated successfully.')
+            return redirect('reviewee_list')
+        except Exception as e:
+            messages.error(request, f'Error updating reviewee: {str(e)}')
+
+    context = {
+        'reviewee': reviewee,
+        'action': 'Edit',
+    }
+
+    return render(request, 'admin_dashboard/reviewee_form.html', context)
+
+
+@login_required
+def reviewee_delete(request, reviewee_id):
+    """Soft delete a reviewee - admin only"""
+    from accounts.permissions import organization_admin_required
+
+    # Check admin permission
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(
+            request,
+            'You do not have permission to delete reviewees. Only organization administrators can access this feature.'
+        )
+        return redirect('reviewee_list')
+
+    reviewee = get_object_or_404(Reviewee, id=reviewee_id)
+
+    if request.method == 'POST':
+        reviewee.is_active = False
+        reviewee.save()
+        messages.success(request, f'Reviewee "{reviewee.name}" deactivated.')
+        return redirect('reviewee_list')
+
+    context = {
+        'reviewee': reviewee,
+    }
+
+    return render(request, 'admin_dashboard/reviewee_confirm_delete.html', context)
+
+
+@login_required
+@require_POST
+def quick_cycle_create(request, reviewee_id):
+    """
+    Quick cycle creation from reviewee/cycle list.
+    Creates a cycle based on a specified source cycle or the most recent cycle for this reviewee.
+    Copies token structure and email assignments from the source cycle.
+    If no previous cycle exists, creates default tokens (1 self, 3 peers, 1 manager, 0 direct reports).
+    """
+    from accounts.permissions import organization_admin_required
+
+    # Check admin permission
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(
+            request,
+            'You do not have permission to create review cycles. Only organization administrators can access this feature.'
+        )
+        return redirect('reviewee_list')
+
+    org = request.organization
+    reviewee = get_object_or_404(Reviewee, id=reviewee_id, organization=org, is_active=True)
+    questionnaire_id = request.POST.get('questionnaire_id')
+    source_cycle_uuid = request.POST.get('source_cycle_uuid')  # Optional: specific cycle to copy from
+
+    if not questionnaire_id:
+        messages.error(request, 'Questionnaire is required.')
+        return redirect('reviewee_list')
+
+    try:
+        questionnaire = Questionnaire.objects.get(id=questionnaire_id, organization=org)
+    except Questionnaire.DoesNotExist:
+        messages.error(request, 'Invalid questionnaire selected.')
+        return redirect('reviewee_list')
+
+    # Create the cycle
+    cycle = ReviewCycle.objects.create(
+        reviewee=reviewee,
+        questionnaire=questionnaire,
+        created_by=request.user,
+        status='active'
+    )
+
+    # Get the cycle to copy from
+    if source_cycle_uuid:
+        # Copy from specific cycle if provided
+        try:
+            previous_cycle = ReviewCycle.objects.get(uuid=source_cycle_uuid, reviewee=reviewee)
+        except ReviewCycle.DoesNotExist:
+            previous_cycle = None
+    else:
+        # Otherwise, get the most recent previous cycle for this reviewee
+        previous_cycle = reviewee.review_cycles.exclude(id=cycle.id).order_by('-created_at').first()
+
+    total_tokens = 0
+    email_invited_count = 0
+
+    if previous_cycle:
+        # Copy tokens from previous cycle, including email assignments
+        previous_tokens = previous_cycle.tokens.all()
+
+        for prev_token in previous_tokens:
+            new_token = ReviewerToken.objects.create(
+                cycle=cycle,
+                category=prev_token.category,
+                reviewer_email=prev_token.reviewer_email
+            )
+            total_tokens += 1
+            if prev_token.reviewer_email:
+                email_invited_count += 1
+
+        # Send invitations to all email-assigned tokens
+        if email_invited_count > 0:
+            send_stats = send_reviewer_invitations(cycle)
+
+            messages.success(
+                request,
+                f'Review cycle created for "{reviewee.name}" using "{questionnaire.name}". '
+                f'Copied {total_tokens} reviewer(s) from previous cycle. '
+                f'{send_stats["sent"]} email invitation(s) sent.'
+            )
+        else:
+            messages.success(
+                request,
+                f'Review cycle created for "{reviewee.name}" using "{questionnaire.name}" with {total_tokens} reviewer token(s). '
+                f'Go to the cycle details to assign reviewers and send invitations.'
+            )
+    else:
+        # No previous cycle - use default token distribution
+        token_distribution = [
+            ('self', 1),
+            ('peer', 3),
+            ('manager', 1),
+            ('direct_report', 0),
+        ]
+
+        for category, count in token_distribution:
+            for _ in range(count):
+                ReviewerToken.objects.create(
+                    cycle=cycle,
+                    category=category
+                )
+                total_tokens += 1
+
+        messages.success(
+            request,
+            f'Review cycle created for "{reviewee.name}" using "{questionnaire.name}" with {total_tokens} reviewer token(s). '
+            f'Go to the cycle details to assign reviewers and send invitations.'
+        )
+
+    # Redirect to cycle detail page
+    return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+
+@login_required
+def questionnaire_list(request):
+    """List available questionnaires"""
+    from django.db.models import Subquery, OuterRef
+    from questionnaires.models import Question
+
+    org = request.organization
+
+    # Subquery to count questions correctly
+    question_count_subquery = Question.objects.filter(
+        section__questionnaire=OuterRef('pk')
+    ).values('section__questionnaire').annotate(
+        count=Count('id')
+    ).values('count')
+
+    # Only show questionnaires belonging to the user's organization
+    # Template questionnaires (organization=None) are not shown here as they're internal
+    questionnaires_qs = Questionnaire.objects.filter(
+        organization=org
+    ) if org else Questionnaire.objects.filter(organization__isnull=False)
+
+    questionnaires = questionnaires_qs.annotate(
+        question_count=Subquery(question_count_subquery),
+        cycle_count=Count('review_cycles')
+    ).prefetch_related(
+        'sections__questions'
+    ).order_by('-is_default', 'name')
+
+    context = {
+        'questionnaires': questionnaires,
+    }
+
+    return render(request, 'admin_dashboard/questionnaire_list.html', context)
+
+
+@login_required
+def questionnaire_preview(request, questionnaire_id):
+    """Preview a questionnaire"""
+    questionnaire = get_object_or_404(Questionnaire, id=questionnaire_id)
+    sections = questionnaire.sections.prefetch_related('questions').all()
+
+    context = {
+        'questionnaire': questionnaire,
+        'sections': sections,
+    }
+
+    return render(request, 'admin_dashboard/questionnaire_preview.html', context)
+
+
+@login_required
+def questionnaire_sample_report(request, questionnaire_id):
+    """Render an illustrative sample report for a questionnaire.
+
+    Builds a synthetic but shape-correct `insights` and `charts` data set so we
+    can reuse the real Dreyfus diamond + agency SVGs and Chart.js radar/gap
+    graphs. Seeded by questionnaire id so reloads look identical.
+    """
+    import random
+    from reports.dreyfus_service import (
+        DREYFUS_STAGES,
+        AGENCY_STAGES,
+        QUADRANTS,
+        calculate_dreyfus_quadrant,
+        _level_to_stage,
+        _get_development_focus,
+    )
+
+    questionnaire = get_object_or_404(
+        Questionnaire.objects.prefetch_related('sections__questions'),
+        id=questionnaire_id,
+    )
+
+    rng = random.Random(questionnaire.id)
+
+    def score(center, spread=0.35):
+        value = rng.uniform(center - spread, center + spread)
+        return round(max(1.0, min(5.0, value)), 1)
+
+    # Per-section scores, shaped exactly like what chart.js expects.
+    section_scores = {}
+    sections_data = []
+    overall_totals = []
+    for section in questionnaire.sections.all():
+        base = rng.uniform(3.4, 4.4)
+        cats = {
+            'self': score(base - 0.2),
+            'peer': score(base + 0.05),
+            'manager': score(base + 0.15),
+            'direct_report': score(base),
+        }
+        cats['others_avg'] = round(
+            (cats['peer'] + cats['manager'] + cats['direct_report']) / 3, 1
+        )
+        section_scores[section.title] = cats
+        sections_data.append({
+            'title': section.title,
+            'overall_score': cats['others_avg'],
+            'category_scores': [
+                ('self', cats['self']),
+                ('peer', cats['peer']),
+                ('manager', cats['manager']),
+                ('direct_report', cats['direct_report']),
+            ],
+            'question_count': section.questions.count(),
+        })
+        overall_totals.append(cats['others_avg'])
+
+    overall_score = round(sum(overall_totals) / len(overall_totals), 1) if overall_totals else 0.0
+
+    # Build the `insights` dict that `reports/_dreyfus_profile.html` consumes.
+    has_skill, has_agency = questionnaire.dreyfus_dimensions
+    insights = {}
+
+    if has_skill:
+        skill_level = round(rng.uniform(3.2, 4.1), 2)
+        stage_num = _level_to_stage(skill_level)
+        stage_info = DREYFUS_STAGES[stage_num].copy()
+        next_stage_num = min(5, stage_num + 1)
+        if next_stage_num > stage_num:
+            stage_info['next_stage'] = DREYFUS_STAGES[next_stage_num]['name']
+            stage_info['development_focus'] = _get_development_focus(stage_num, next_stage_num)
+        else:
+            stage_info['next_stage'] = None
+            stage_info['development_focus'] = ['Continue deepening expertise and innovating']
+
+        insights['skill_profile'] = {
+            'skill_level': skill_level,
+            'skill_stage': stage_info['name'],
+            'confidence': 0.85,
+            'stage_info': stage_info,
+        }
+
+    if has_agency:
+        agency_level = round(rng.uniform(3.4, 4.3), 2)
+        agency_stage_num = max(1, min(5, round(agency_level)))
+        agency_stage_info = AGENCY_STAGES[agency_stage_num]
+        insights['agency_profile'] = {
+            'agency_level': agency_level,
+            'agency_stage': agency_stage_info['name'],
+            'confidence': 0.85,
+            'description': agency_stage_info['description'],
+        }
+
+    if has_skill and has_agency:
+        insights['dreyfus_quadrant'] = calculate_dreyfus_quadrant(
+            insights['skill_profile']['skill_level'],
+            insights['agency_profile']['agency_level'],
+        )
+
+    # Minimal development plan so the "next level" cards render.
+    if has_skill:
+        insights['development_plan'] = {
+            'next_level_requirements': insights['skill_profile']['stage_info'].get(
+                'development_focus', []
+            ),
+            'quick_wins': [
+                'Pair with a more senior teammate on a challenging problem this sprint',
+                'Document one decision you made and why — share it for review',
+                'Pick a weak area from the feedback and book focused practice time',
+            ],
+        }
+
+    context = {
+        'questionnaire': questionnaire,
+        'sections_data': sections_data,
+        'overall_score': overall_score,
+        'insights': insights,
+        'chart_data': {'section_scores': section_scores},
+    }
+
+    return render(request, 'admin_dashboard/questionnaire_sample_report.html', context)
+
+
+@login_required
+def questionnaire_create(request):
+    """Create a new questionnaire"""
+    from questionnaires.models import QuestionSection, Question
+
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description', '')
+        is_default = request.POST.get('is_default') == 'on'
+
+        if not name:
+            messages.error(request, 'Questionnaire name is required.')
+            return render(request, 'admin_dashboard/questionnaire_form.html', {'action': 'Create'})
+
+        try:
+            # Get organization from request context
+            org = getattr(request, 'organization', None)
+
+            questionnaire = Questionnaire.objects.create(
+                name=name,
+                description=description,
+                is_default=is_default,
+                organization=org
+            )
+            messages.success(request, f'Questionnaire "{questionnaire.name}" created successfully.')
+            return redirect('questionnaire_edit', questionnaire_id=questionnaire.id)
+        except Exception as e:
+            messages.error(request, f'Error creating questionnaire: {str(e)}')
+
+    context = {
+        'action': 'Create',
+    }
+
+    return render(request, 'admin_dashboard/questionnaire_form.html', context)
+
+
+@login_required
+def questionnaire_edit(request, questionnaire_id):
+    """Edit an existing questionnaire"""
+    from questionnaires.models import QuestionSection, Question
+
+    # Get organization from request context
+    org = getattr(request, 'organization', None)
+
+    # Filter by organization to prevent cross-org access
+    questionnaire = get_object_or_404(
+        Questionnaire,
+        id=questionnaire_id,
+        organization=org
+    )
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'update_info':
+            questionnaire.name = request.POST.get('name', questionnaire.name)
+            questionnaire.description = request.POST.get('description', '')
+            questionnaire.is_default = request.POST.get('is_default') == 'on'
+
+            try:
+                questionnaire.save()
+                messages.success(request, f'Questionnaire "{questionnaire.name}" updated successfully.')
+            except Exception as e:
+                messages.error(request, f'Error updating questionnaire: {str(e)}')
+
+        elif action == 'add_section':
+            section_title = request.POST.get('section_title')
+            section_description = request.POST.get('section_description', '')
+
+            if section_title:
+                max_order = questionnaire.sections.aggregate(Max('order'))['order__max']
+                next_order = (max_order + 1) if max_order is not None else 0
+                try:
+                    QuestionSection.objects.create(
+                        questionnaire=questionnaire,
+                        title=section_title,
+                        description=section_description,
+                        order=next_order
+                    )
+                    messages.success(request, f'Section "{section_title}" added.')
+                except Exception as e:
+                    messages.error(request, f'Error adding section: {str(e)}')
+
+        elif action == 'edit_section':
+            section_id = request.POST.get('section_id')
+            section_title = request.POST.get('section_title')
+            section_description = request.POST.get('section_description', '')
+
+            if section_id and section_title:
+                try:
+                    section = QuestionSection.objects.get(id=section_id, questionnaire=questionnaire)
+                    section.title = section_title
+                    section.description = section_description
+                    section.save()
+                    messages.success(request, f'Section "{section_title}" updated successfully.')
+                except QuestionSection.DoesNotExist:
+                    messages.error(request, 'Section not found.')
+                except Exception as e:
+                    messages.error(request, f'Error updating section: {str(e)}')
+
+        elif action == 'add_question':
+            section_id = request.POST.get('section_id')
+            question_text = request.POST.get('question_text')
+            question_type = request.POST.get('question_type', 'rating')
+            required = request.POST.get('required') == 'on'
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+            if section_id and question_text:
+                try:
+                    section = QuestionSection.objects.get(id=section_id, questionnaire=questionnaire)
+                    max_order = section.questions.aggregate(Max('order'))['order__max']
+                    next_order = (max_order + 1) if max_order is not None else 0
+
+                    # Build config based on question type
+                    config = {}
+                    if question_type == 'rating':
+                        config = {
+                            'min': 1,
+                            'max': 5,
+                            'labels': {
+                                '1': 'Strongly Disagree',
+                                '2': 'Disagree',
+                                '3': 'Neutral',
+                                '4': 'Agree',
+                                '5': 'Strongly Agree'
+                            }
+                        }
+                    elif question_type == 'likert':
+                        scale_raw = request.POST.get('likert_scale', '')
+                        if scale_raw:
+                            scale = [s.strip() for s in scale_raw.split('\n') if s.strip()]
+                        else:
+                            scale = ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree']
+                        config = {'scale': scale}
+                    elif question_type == 'single_choice' or question_type == 'multiple_choice':
+                        choices_raw = request.POST.get('choices', '')
+                        choices = [c.strip() for c in choices_raw.split('\n') if c.strip()]
+                        config = {'choices': choices}
+
+                        # Check if scoring is enabled and weights are provided
+                        enable_scoring = request.POST.get('enable_scoring') == 'on'
+                        if enable_scoring:
+                            weights_raw = request.POST.getlist('weights[]')
+                            try:
+                                # Parse weights as floats
+                                weights = [float(w) for w in weights_raw if w.strip()]
+                                # Validate: weights must match choices length
+                                if len(weights) == len(choices):
+                                    config['weights'] = weights
+                                    config['scoring_enabled'] = True
+                                else:
+                                    messages.warning(request, 'Weights count did not match choices count. Scoring disabled for this question.')
+                            except (ValueError, TypeError):
+                                messages.warning(request, 'Invalid weight values. Scoring disabled for this question.')
+                    elif question_type == 'scale':
+                        try:
+                            min_val = int(request.POST.get('scale_min', 1))
+                            max_val = int(request.POST.get('scale_max', 100))
+                            step_val = int(request.POST.get('scale_step', 1))
+                            min_label = request.POST.get('scale_min_label', '').strip()
+                            max_label = request.POST.get('scale_max_label', '').strip()
+
+                            config = {
+                                'min': min_val,
+                                'max': max_val,
+                                'step': step_val
+                            }
+                            if min_label:
+                                config['min_label'] = min_label
+                            if max_label:
+                                config['max_label'] = max_label
+                        except (ValueError, TypeError):
+                            # Use defaults if parsing fails
+                            config = {'min': 1, 'max': 100, 'step': 1}
+                            messages.warning(request, 'Invalid scale values. Using defaults (1-100, step 1).')
+
+                    # Add Dreyfus/Agency configuration if provided
+                    skill_weight = request.POST.get('add_skill_weight', 0)
+                    agency_weight = request.POST.get('add_agency_weight', 0)
+
+                    if skill_weight or agency_weight:
+                        config['dreyfus_mapping'] = {
+                            'skill': float(skill_weight),
+                            'agency': float(agency_weight)
+                        }
+
+                    # Parse action items for new question
+                    action_items = []
+                    action_item_indices = set()
+
+                    # Extract all action item indices from POST data
+                    for key in request.POST.keys():
+                        if key.startswith('add_action_items[') and '][text]' in key:
+                            idx_str = key.split('[')[1].split(']')[0]
+                            action_item_indices.add(idx_str)
+
+                    # Build action items list
+                    for idx in sorted(action_item_indices):
+                        text = request.POST.get(f'add_action_items[{idx}][text]', '').strip()
+                        threshold = request.POST.get(f'add_action_items[{idx}][threshold]', 3.0)
+                        stages_raw = request.POST.getlist(f'add_action_items[{idx}][stages][]')
+
+                        if text:
+                            item = {
+                                'text': text,
+                                'threshold': float(threshold)
+                            }
+                            if stages_raw:
+                                item['stages'] = [int(s) for s in stages_raw]
+                            action_items.append(item)
+
+                    question = Question.objects.create(
+                        section=section,
+                        question_text=question_text,
+                        question_type=question_type,
+                        config=config,
+                        required=required,
+                        order=next_order,
+                        action_items=action_items
+                    )
+
+                    if is_ajax:
+                        question_html = render_to_string(
+                            'admin_dashboard/partials/question_card.html',
+                            {'question': question},
+                            request=request,
+                        )
+                        return JsonResponse({
+                            'success': True,
+                            'message': 'Question added successfully.',
+                            'section_id': section.id,
+                            'question_id': question.id,
+                            'question_html': question_html,
+                        })
+
+                    messages.success(request, 'Question added successfully.')
+                except Exception as e:
+                    logger.exception('Error adding question')
+                    if is_ajax:
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'Error adding question. Please try again.',
+                        }, status=400)
+                    messages.error(request, 'Error adding question. Please try again.')
+
+        elif action == 'delete_section':
+            section_id = request.POST.get('section_id')
+            try:
+                section = QuestionSection.objects.get(id=section_id, questionnaire=questionnaire)
+                section_title = section.title
+                section.delete()
+                messages.success(request, f'Section "{section_title}" deleted.')
+            except Exception as e:
+                messages.error(request, f'Error deleting section: {str(e)}')
+
+        elif action == 'delete_question':
+            question_id = request.POST.get('question_id')
+            try:
+                question = Question.objects.get(id=question_id, section__questionnaire=questionnaire)
+                question.delete()
+                messages.success(request, 'Question deleted.')
+            except Exception as e:
+                messages.error(request, f'Error deleting question: {str(e)}')
+
+        elif action == 'edit_question':
+            question_id = request.POST.get('question_id')
+            question_text = request.POST.get('question_text')
+            question_type = request.POST.get('question_type', 'rating')
+            required = request.POST.get('required') == 'on'
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+            if question_id and question_text:
+                try:
+                    question = Question.objects.get(id=question_id, section__questionnaire=questionnaire)
+
+                    # Update basic fields
+                    question.question_text = question_text
+                    question.question_type = question_type
+                    question.required = required
+
+                    # Build config based on question type
+                    config = {}
+                    if question_type == 'rating':
+                        config = {
+                            'min': 1,
+                            'max': 5,
+                            'labels': {
+                                '1': 'Strongly Disagree',
+                                '2': 'Disagree',
+                                '3': 'Neutral',
+                                '4': 'Agree',
+                                '5': 'Strongly Agree'
+                            }
+                        }
+                    elif question_type == 'likert':
+                        scale_raw = request.POST.get('likert_scale', '')
+                        if scale_raw:
+                            scale = [s.strip() for s in scale_raw.split('\n') if s.strip()]
+                        else:
+                            scale = ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree']
+                        config = {'scale': scale}
+                    elif question_type == 'single_choice' or question_type == 'multiple_choice':
+                        choices_raw = request.POST.get('choices', '')
+                        choices = [c.strip() for c in choices_raw.split('\n') if c.strip()]
+                        config = {'choices': choices}
+
+                        # Check if scoring is enabled and weights are provided
+                        enable_scoring = request.POST.get('enable_scoring') == 'on'
+                        if enable_scoring:
+                            weights_raw = request.POST.getlist('weights[]')
+                            try:
+                                # Parse weights as floats
+                                weights = [float(w) for w in weights_raw if w.strip()]
+                                # Validate: weights must match choices length
+                                if len(weights) == len(choices):
+                                    config['weights'] = weights
+                                    config['scoring_enabled'] = True
+                                else:
+                                    messages.warning(request, 'Weights count did not match choices count. Scoring disabled for this question.')
+                            except (ValueError, TypeError):
+                                messages.warning(request, 'Invalid weight values. Scoring disabled for this question.')
+                    elif question_type == 'scale':
+                        try:
+                            min_val = int(request.POST.get('scale_min', 1))
+                            max_val = int(request.POST.get('scale_max', 100))
+                            step_val = int(request.POST.get('scale_step', 1))
+                            min_label = request.POST.get('scale_min_label', '').strip()
+                            max_label = request.POST.get('scale_max_label', '').strip()
+
+                            config = {
+                                'min': min_val,
+                                'max': max_val,
+                                'step': step_val
+                            }
+                            if min_label:
+                                config['min_label'] = min_label
+                            if max_label:
+                                config['max_label'] = max_label
+                        except (ValueError, TypeError):
+                            # Use defaults if parsing fails
+                            config = {'min': 1, 'max': 100, 'step': 1}
+                            messages.warning(request, 'Invalid scale values. Using defaults (1-100, step 1).')
+
+                    question.config = config
+                    question.save()
+
+                    if is_ajax:
+                        return JsonResponse({
+                            'success': True,
+                            'message': 'Question updated successfully.',
+                            'question': {
+                                'id': question.id,
+                                'question_text': question.question_text,
+                                'question_type': question.question_type,
+                                'question_type_display': question.get_question_type_display(),
+                                'required': question.required,
+                                'config': question.config,
+                            },
+                        })
+
+                    messages.success(request, 'Question updated successfully.')
+                except Exception as e:
+                    logger.exception('Error updating question')
+                    if is_ajax:
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'Error updating question. Please try again.',
+                        }, status=400)
+                    messages.error(request, 'Error updating question. Please try again.')
+
+        elif action == 'update_dreyfus_config':
+            question_id = request.POST.get('question_id')
+            skill_weight = request.POST.get('skill_weight', 0)
+            agency_weight = request.POST.get('agency_weight', 0)
+
+            if question_id:
+                try:
+                    question = Question.objects.get(id=question_id, section__questionnaire=questionnaire)
+
+                    # Update dreyfus_mapping in config
+                    if 'dreyfus_mapping' not in question.config:
+                        question.config['dreyfus_mapping'] = {}
+
+                    question.config['dreyfus_mapping']['skill'] = float(skill_weight)
+                    question.config['dreyfus_mapping']['agency'] = float(agency_weight)
+
+                    # Parse action items from form
+                    action_items = []
+                    action_item_indices = set()
+
+                    # Extract all action item indices from the POST data
+                    for key in request.POST.keys():
+                        if key.startswith('action_items[') and '][text]' in key:
+                            # Extract index from key like "action_items[0][text]"
+                            idx_str = key.split('[')[1].split(']')[0]
+                            action_item_indices.add(idx_str)
+
+                    # Build action items list
+                    for idx in sorted(action_item_indices):
+                        text = request.POST.get(f'action_items[{idx}][text]', '').strip()
+                        threshold = request.POST.get(f'action_items[{idx}][threshold]', 3.0)
+                        stages_raw = request.POST.getlist(f'action_items[{idx}][stages][]')
+
+                        if text:  # Only add if text is not empty
+                            item = {
+                                'text': text,
+                                'threshold': float(threshold)
+                            }
+
+                            # Add stages if any are selected
+                            if stages_raw:
+                                item['stages'] = [int(s) for s in stages_raw]
+
+                            action_items.append(item)
+
+                    question.action_items = action_items
+                    question.save()
+
+                    messages.success(request, 'Dreyfus/Agency configuration updated successfully.')
+                except Question.DoesNotExist:
+                    messages.error(request, 'Question not found.')
+                except Exception as e:
+                    messages.error(request, f'Error updating Dreyfus configuration: {str(e)}')
+
+        return redirect('questionnaire_edit', questionnaire_id=questionnaire.id)
+
+    sections = questionnaire.sections.prefetch_related('questions').all()
+
+    context = {
+        'action': 'Edit',
+        'questionnaire': questionnaire,
+        'sections': sections,
+    }
+
+    return render(request, 'admin_dashboard/questionnaire_form.html', context)
+
+
+@login_required
+def question_dreyfus_config_api(request, question_id):
+    """API endpoint to get Dreyfus/Agency configuration for a question"""
+    from django.http import JsonResponse
+    from questionnaires.models import Question
+
+    try:
+        # Get the organization from request
+        org = getattr(request, 'organization', None)
+
+        # Get question and verify it belongs to the user's organization
+        question = Question.objects.select_related('section__questionnaire').get(
+            id=question_id,
+            section__questionnaire__organization=org
+        )
+
+        # Extract dreyfus_mapping from config
+        dreyfus_mapping = question.config.get('dreyfus_mapping', {})
+
+        # Return configuration
+        return JsonResponse({
+            'dreyfus_mapping': dreyfus_mapping,
+            'action_items': question.action_items
+        })
+
+    except Question.DoesNotExist:
+        return JsonResponse({'error': 'Question not found'}, status=404)
+    except Exception as e:
+        logger.exception('Error fetching Dreyfus config')
+        return JsonResponse({'error': 'Internal server error'}, status=500)
+
+
+@login_required
+def review_cycle_list(request):
+    """List all review cycles"""
+    org = request.organization
+
+    if org:
+        # Filter out cycles for anonymized reviewees
+        cycles_qs = ReviewCycle.objects.for_organization(org).select_related(
+            'reviewee', 'questionnaire', 'created_by'
+        )
+    else:
+        cycles_qs = ReviewCycle.objects.select_related(
+            'reviewee', 'questionnaire', 'created_by'
+        )
+
+    cycles_qs = visible_cycles(request.user, cycles_qs)
+
+    cycles_qs = cycles_qs.prefetch_related(
+        'questionnaire__sections__questions'
+    ).annotate(
+        token_count=Count('tokens'),
+        completed_count=Count('tokens', filter=Q(tokens__completed_at__isnull=False))
+    ).order_by('-created_at')
+
+    # Get per_page from request, default to 25
+    per_page = request.GET.get('per_page', '25')
+    try:
+        per_page = int(per_page)
+        if per_page not in [25, 50, 100]:
+            per_page = 25
+    except (ValueError, TypeError):
+        per_page = 25
+
+    # Paginate cycles
+    paginator = Paginator(cycles_qs, per_page)
+    page = request.GET.get('page')
+    try:
+        cycles = paginator.page(page)
+    except PageNotAnInteger:
+        cycles = paginator.page(1)
+    except EmptyPage:
+        cycles = paginator.page(paginator.num_pages)
+
+    # Get available questionnaires for quick cycle creation
+    questionnaires = Questionnaire.objects.for_organization(org).filter(is_active=True).order_by('-is_default', 'name')
+
+    # Enhance cycles with latest questionnaire info for each reviewee
+    cycles_with_latest = []
+    for cycle in cycles:
+        latest_cycle = cycle.reviewee.review_cycles.select_related('questionnaire').order_by('-created_at').first()
+        cycles_with_latest.append({
+            'cycle': cycle,
+            'latest_questionnaire': latest_cycle.questionnaire if latest_cycle else None,
+        })
+
+    context = {
+        'cycles_with_latest': cycles_with_latest,
+        'cycles': cycles,  # Paginated object
+        'questionnaires': questionnaires,
+        'per_page': per_page,
+    }
+
+    return render(request, 'admin_dashboard/review_cycle_list.html', context)
+
+
+@login_required
+def review_cycle_create(request):
+    """Create a new review cycle (single or bulk)"""
+    if request.method == 'POST':
+        creation_mode = request.POST.get('creation_mode', 'single')
+        questionnaire_id = request.POST.get('questionnaire')
+
+        if not questionnaire_id:
+            messages.error(request, 'Questionnaire is required.')
+            return redirect('review_cycle_create')
+
+        try:
+            # Get organization from request context
+            org = getattr(request, 'organization', None)
+
+            # Filter by organization to prevent cross-org access
+            questionnaire = Questionnaire.objects.get(
+                id=questionnaire_id,
+                organization=org
+            )
+            created_cycles = []
+
+            if creation_mode == 'bulk':
+                # Create cycles for all active reviewees. Intentionally do NOT
+                # send any emails here — the admin confirms sending on the
+                # follow-up bulk_send_invitations page. This prevents the
+                # request from stalling on SMTP and avoids surprise blasts.
+                reviewees = Reviewee.objects.for_organization(org).filter(is_active=True)
+
+                with transaction.atomic():
+                    for reviewee in reviewees:
+                        cycle = ReviewCycle.objects.create(
+                            reviewee=reviewee,
+                            questionnaire=questionnaire,
+                            created_by=request.user,
+                            status='active'
+                        )
+                        created_cycles.append(cycle)
+
+                # Stash the cycle UUIDs in the session for the send-invitations
+                # confirmation step. Session avoids URL-length limits when the
+                # org has many reviewees.
+                request.session['pending_invitation_cycles'] = [
+                    str(c.uuid) for c in created_cycles
+                ]
+
+                messages.success(
+                    request,
+                    f'Created {len(created_cycles)} review cycles. No invitations have been sent yet.'
+                )
+                return redirect('bulk_send_invitations')
+
+            else:
+                # Single reviewee mode
+                reviewee_id = request.POST.get('reviewee')
+                if not reviewee_id:
+                    messages.error(request, 'Reviewee is required for single cycle creation.')
+                    return redirect('review_cycle_create')
+
+                reviewee = Reviewee.objects.for_organization(org).get(id=reviewee_id)
+
+                # Create review cycle (no tokens created here)
+                cycle = ReviewCycle.objects.create(
+                    reviewee=reviewee,
+                    questionnaire=questionnaire,
+                    created_by=request.user,
+                    status='active'
+                )
+
+                # Send notification emails to reviewee. Defer to after the
+                # transaction commits so a slow SMTP backend can't stall this
+                # request (matches the pattern in api/signals.py).
+                from reviews.services import send_reviewee_notifications
+                transaction.on_commit(
+                    lambda c=cycle: send_reviewee_notifications(c, request)
+                )
+
+                # Check if user provided reviewer emails
+                from django.core.validators import validate_email
+                from django.core.exceptions import ValidationError
+                import re
+
+                email_assignments = {}
+                has_emails = False
+
+                for category_code, category_display in ReviewerToken.CATEGORY_CHOICES:
+                    emails_data = request.POST.get(f'{category_code}_emails', '').strip()
+                    if emails_data:
+                        emails = re.split(r'[,\n]+', emails_data)
+                        validated_emails = []
+                        for e in emails:
+                            e = e.strip()
+                            if e:
+                                try:
+                                    validate_email(e)
+                                    validated_emails.append(e)
+                                    has_emails = True
+                                except ValidationError:
+                                    messages.warning(request, f'Invalid email skipped in {category_display}: {e}')
+                        email_assignments[category_code] = validated_emails
+                    else:
+                        email_assignments[category_code] = []
+
+                # If emails were provided, create tokens and assign them
+                if has_emails:
+                    # Create tokens dynamically based on email count
+                    for category_code, emails in email_assignments.items():
+                        if emails:
+                            for _ in range(len(emails)):
+                                ReviewerToken.objects.create(
+                                    cycle=cycle,
+                                    category=category_code
+                                )
+
+                    # Assign tokens to emails with randomization
+                    assign_stats = assign_tokens_to_emails(cycle, email_assignments)
+
+                    # Check if user wants to send invitations immediately.
+                    # Defer the send to after-commit so SMTP latency never
+                    # stalls the request.
+                    send_now = request.POST.get('send_invitations_now') == '1'
+                    if send_now and assign_stats['assigned'] > 0:
+                        transaction.on_commit(
+                            lambda c=cycle: send_reviewer_invitations(c)
+                        )
+                        messages.success(
+                            request,
+                            f'Review cycle created for "{reviewee.name}" with {assign_stats["assigned"]} reviewer(s) invited. Invitation emails are being sent.'
+                        )
+                        return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+                    else:
+                        messages.success(
+                            request,
+                            f'Review cycle created for "{reviewee.name}" with {assign_stats["assigned"]} reviewer(s) assigned. Visit the invitations page to send emails.'
+                        )
+                        # Redirect to invitations page to send emails
+                        return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+                else:
+                    # No emails provided, show success and redirect to invitations.
+                    # Reviewee notifications were queued via on_commit above.
+                    messages.success(
+                        request,
+                        f'Review cycle created for "{reviewee.name}". Notification emails are being sent to the reviewee.'
+                    )
+                    # Redirect to invitations page to add reviewers
+                    return redirect('manage_invitations', cycle_uuid=cycle.uuid)
+
+        except Exception as e:
+            messages.error(request, f'Error creating review cycle: {str(e)}')
+            return redirect('review_cycle_create')
+
+    # GET request - show form
+    org = request.organization or (request.user.profile.organization if hasattr(request.user, 'profile') else None)
+
+    # Filter reviewees based on user permissions
+    if hasattr(request.user, 'profile') and not request.user.profile.can_create_cycles_for_others:
+        # User can only create cycles for themselves
+        reviewees = Reviewee.objects.for_organization(org).filter(
+            is_active=True,
+            email=request.user.email
+        ).order_by('name')
+    else:
+        reviewees = Reviewee.objects.for_organization(org).filter(is_active=True).order_by('name')
+
+    # Only show questionnaires from user's organization.
+    # Prefetch sections/questions so report_type_label doesn't N+1 per option.
+    questionnaires = (
+        Questionnaire.objects.for_organization(org)
+        .prefetch_related('sections__questions')
+        .order_by('-is_default', 'name')
+    )
+
+    context = {
+        'reviewees': reviewees,
+        'questionnaires': questionnaires,
+        'can_create_for_others': hasattr(request.user, 'profile') and request.user.profile.can_create_cycles_for_others,
+    }
+
+    return render(request, 'admin_dashboard/review_cycle_form.html', context)
+
+
+@login_required
+def bulk_send_invitations(request):
+    """Confirm + send reviewee notifications for cycles just created in bulk.
+
+    The `review_cycle_create` view stashes the UUIDs of freshly-bulk-created
+    cycles in the session under 'pending_invitation_cycles'. This view renders
+    them for review on GET and defers the actual send on POST.
+    """
+    from reviews.services import send_reviewee_notifications
+
+    org = request.organization
+    uuids = request.session.get('pending_invitation_cycles', [])
+
+    cycles_qs = (
+        ReviewCycle.objects
+        .select_related('reviewee', 'questionnaire')
+        .prefetch_related('questionnaire__sections__questions')
+        .filter(uuid__in=uuids)
+    )
+    if org:
+        cycles_qs = cycles_qs.filter(reviewee__organization=org)
+    cycles = list(cycles_qs.order_by('reviewee__name'))
+
+    if request.method == 'POST':
+        if not cycles:
+            messages.info(request, 'No pending cycles to send invitations for.')
+            return redirect('review_cycle_list')
+
+        for cycle in cycles:
+            transaction.on_commit(
+                lambda c=cycle: send_reviewee_notifications(c, request)
+            )
+
+        # Clear the session once we've scheduled the sends.
+        request.session.pop('pending_invitation_cycles', None)
+
+        messages.success(
+            request,
+            f'Invitations are being sent for {len(cycles)} review cycle(s).'
+        )
+        return redirect('review_cycle_list')
+
+    context = {
+        'cycles': cycles,
+    }
+    return render(request, 'admin_dashboard/bulk_send_invitations.html', context)
+
+
+@login_required
+def review_cycle_detail(request, cycle_uuid):
+    """View details of a review cycle"""
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    tokens = cycle.tokens.all().order_by('category', 'created_at')
+
+    # Group tokens by category
+    tokens_by_category = {}
+    for token in tokens:
+        category = token.get_category_display()
+        if category not in tokens_by_category:
+            tokens_by_category[category] = []
+        tokens_by_category[category].append(token)
+
+    # Calculate completion stats
+    total_tokens = tokens.count()
+    completed_tokens = tokens.filter(completed_at__isnull=False).count()
+    claimed_tokens = tokens.filter(claimed_at__isnull=False).count()
+    pending_invites = tokens.filter(reviewer_email__isnull=False, invitation_sent_at__isnull=True).count()
+    pending_reminders = tokens.filter(invitation_sent_at__isnull=False, completed_at__isnull=True).count()
+    email_invited_count = tokens.filter(reviewer_email__isnull=False).exclude(category='self').count()
+    completion_rate = (completed_tokens / total_tokens * 100) if total_tokens > 0 else 0
+    claimed_completion_rate = (completed_tokens / claimed_tokens * 100) if claimed_tokens > 0 else 0
+
+    # Get report if exists
+    try:
+        report = Report.objects.get(cycle=cycle)
+        report_exists = True
+    except Report.DoesNotExist:
+        report = None
+        report_exists = False
+
+    context = {
+        'cycle': cycle,
+        'report': report,
+        'tokens_by_category': tokens_by_category,
+        'total_tokens': total_tokens,
+        'completed_tokens': completed_tokens,
+        'claimed_tokens': claimed_tokens,
+        'pending_invites': pending_invites,
+        'pending_reminders': pending_reminders,
+        'email_invited_count': email_invited_count,
+        'completion_rate': completion_rate,
+        'claimed_completion_rate': claimed_completion_rate,
+        'report_exists': report_exists,
+    }
+
+    return render(request, 'admin_dashboard/review_cycle_detail.html', context)
+
+
+@login_required
+def generate_report_view(request, cycle_uuid):
+    """Generate or regenerate report for a review cycle"""
+    from reports.services import generate_report, send_report_ready_notification
+
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    try:
+        report = generate_report(cycle)
+
+        # Send notification email to reviewee
+        email_stats = send_report_ready_notification(report, request)
+
+        success_msg = f'Report generated successfully for {cycle.reviewee.name}.'
+        if email_stats['sent'] > 0:
+            success_msg += ' Notification email sent.'
+        if email_stats['errors']:
+            success_msg += f' (Email errors: {", ".join(email_stats["errors"])})'
+
+        messages.success(request, success_msg)
+    except Exception as e:
+        messages.error(request, f'Error generating report: {str(e)}')
+
+    return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+
+@login_required
+def close_cycle(request, cycle_uuid):
+    """Close/complete a review cycle and generate report if possible"""
+    if request.method != 'POST':
+        return redirect('review_cycle_detail', cycle_uuid=cycle_uuid)
+
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    if cycle.status != 'active':
+        messages.warning(request, 'This cycle is already completed.')
+        return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+    # Check if there are any completed reviews
+    completed_count = cycle.tokens.filter(completed_at__isnull=False).count()
+
+    if completed_count == 0:
+        messages.error(request, 'Cannot close cycle: No reviews have been completed yet.')
+        return redirect('review_cycle_detail', cycle_uuid=cycle_uuid)
+
+    # Remove unclaimed tokens (tokens that are still active but not claimed)
+    # Keep claimed tokens as an indication that the report was closed while people were still working
+    unclaimed_tokens = cycle.tokens.filter(claimed_at__isnull=True, completed_at__isnull=True)
+    unclaimed_count = unclaimed_tokens.count()
+    unclaimed_tokens.delete()
+
+    # Mark cycle as completed
+    cycle.status = 'completed'
+    cycle.save()
+
+    # Generate report
+    from reports.services import generate_report, send_report_ready_notification
+    try:
+        report = generate_report(cycle)
+
+        # Send notification email to reviewee
+        email_stats = send_report_ready_notification(report, request)
+
+        success_msg = f'Cycle closed and report generated for {cycle.reviewee.name}.'
+        if email_stats['sent'] > 0:
+            success_msg += ' Notification email sent.'
+
+        messages.success(request, success_msg)
+    except Exception as e:
+        messages.error(request, f'Cycle closed but error generating report: {str(e)}')
+
+    return redirect('review_cycle_detail', cycle_uuid=cycle_uuid)
+
+
+@login_required
+def send_reminder_form(request, cycle_uuid):
+    """Show form to send reminders for pending reviews"""
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    # Get pending tokens
+    pending_tokens = cycle.tokens.filter(completed_at__isnull=True).order_by('category')
+
+    context = {
+        'cycle': cycle,
+        'pending_tokens': pending_tokens,
+    }
+
+    return render(request, 'admin_dashboard/send_reminder.html', context)
+
+
+@login_required
+def manage_invitations(request, cycle_uuid):
+    """Manage reviewer invitations for a cycle"""
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    # Group tokens by category
+    tokens_by_category = {}
+    for token in cycle.tokens.all().order_by('category'):
+        category = token.get_category_display()
+        if category not in tokens_by_category:
+            tokens_by_category[category] = []
+        tokens_by_category[category].append(token)
+
+    # Statistics
+    total_tokens = cycle.tokens.count()
+    assigned_tokens = cycle.tokens.filter(reviewer_email__isnull=False).count()
+    sent_tokens = cycle.tokens.filter(invitation_sent_at__isnull=False).count()
+    completed_tokens = cycle.tokens.filter(completed_at__isnull=False).count()
+
+    context = {
+        'cycle': cycle,
+        'tokens_by_category': tokens_by_category,
+        'total_tokens': total_tokens,
+        'assigned_tokens': assigned_tokens,
+        'sent_tokens': sent_tokens,
+        'completed_tokens': completed_tokens,
+    }
+
+    return render(request, 'admin_dashboard/manage_invitations.html', context)
+
+
+@login_required
+def assign_invitations(request, cycle_uuid):
+    """Assign email addresses to reviewer tokens (creating tokens dynamically)"""
+    from django.core.validators import validate_email
+    from django.core.exceptions import ValidationError
+
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    if request.method == 'POST':
+        # Parse email assignments by category
+        import re
+        email_assignments = {}
+
+        for category_code, category_display in ReviewerToken.CATEGORY_CHOICES:
+            emails_data = request.POST.get(f'{category_code}_emails', '').strip()
+            if emails_data:
+                emails = re.split(r'[,\n]+', emails_data)
+                validated_emails = []
+                for e in emails:
+                    e = e.strip()
+                    if e:
+                        try:
+                            validate_email(e)
+                            validated_emails.append(e)
+                        except ValidationError:
+                            messages.warning(request, f'Invalid email skipped in {category_display}: {e}')
+                email_assignments[category_code] = validated_emails
+            else:
+                email_assignments[category_code] = []
+
+        # Create tokens dynamically based on email count
+        tokens_created = 0
+        for category_code, emails in email_assignments.items():
+            if not emails:
+                continue
+
+            # Get existing unassigned tokens for this category (only count tokens without emails)
+            existing_unassigned = cycle.tokens.filter(
+                category=category_code,
+                reviewer_email__isnull=True
+            ).count()
+            needed_count = len(emails)
+
+            # Create additional tokens if needed
+            if needed_count > existing_unassigned:
+                for _ in range(needed_count - existing_unassigned):
+                    ReviewerToken.objects.create(
+                        cycle=cycle,
+                        category=category_code
+                    )
+                    tokens_created += 1
+
+        # Assign tokens to emails with randomization
+        stats = assign_tokens_to_emails(cycle, email_assignments)
+
+        if stats['errors']:
+            for error in stats['errors']:
+                messages.error(request, error)
+
+        # Check if user wants to send invitations immediately
+        action = request.POST.get('action', 'assign')
+        if action == 'assign' and stats['assigned'] > 0:
+            # Send invitations immediately
+            send_stats = send_reviewer_invitations(cycle)
+
+            if send_stats['sent'] > 0:
+                messages.success(request, f'Successfully invited {stats["assigned"]} reviewer(s) and sent {send_stats["sent"]} email(s).')
+            else:
+                messages.success(request, f'Successfully assigned {stats["assigned"]} email(s). Invitations will be sent separately.')
+
+            if send_stats['errors']:
+                for error in send_stats['errors']:
+                    messages.error(request, error)
+        elif stats['assigned'] > 0:
+            messages.success(request, f'Successfully assigned {stats["assigned"]} email(s). No invitations sent yet.')
+
+        return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+    return redirect('manage_invitations', cycle_uuid=cycle.uuid)
+
+
+@login_required
+def send_invitations(request, cycle_uuid):
+    """Send email invitations to assigned reviewers"""
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    if request.method == 'POST':
+        # Send invitations
+        stats = send_reviewer_invitations(cycle)
+
+        if stats['errors']:
+            for error in stats['errors']:
+                messages.error(request, error)
+
+        if stats['sent'] > 0:
+            messages.success(request, f'Successfully sent {stats["sent"]} invitation email(s).')
+        elif stats['sent'] == 0 and not stats['errors']:
+            messages.info(request, 'No pending invitations to send.')
+
+        return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+    return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+
+@login_required
+def send_reminder(request, cycle_uuid):
+    """Send reminder emails for pending reviews"""
+    from reviews.services import send_reminder_emails
+
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    if request.method == 'POST':
+        # Send reminders
+        stats = send_reminder_emails(cycle)
+
+        if stats['errors']:
+            for error in stats['errors']:
+                messages.error(request, error)
+
+        if stats['sent'] > 0:
+            messages.success(request, f'Successfully sent {stats["sent"]} reminder(s).')
+        elif stats['sent'] == 0 and not stats['errors']:
+            messages.info(request, 'No pending reminders to send.')
+
+        return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+    return redirect('send_reminder_form', cycle_uuid=cycle.uuid)
+
+
+@login_required
+@require_POST
+def send_individual_reminder(request, cycle_uuid, token_id):
+    """Send a reminder email to a specific reviewer"""
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from django.conf import settings
+
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    try:
+        # Get the specific token
+        token = ReviewerToken.objects.get(id=token_id, cycle=cycle)
+
+        # Check if token has email and invitation was sent
+        if not token.reviewer_email:
+            messages.error(request, 'Cannot send reminder: no email assigned to this reviewer.')
+            return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+        if not token.invitation_sent_at:
+            messages.error(request, 'Cannot send reminder: invitation not sent yet.')
+            return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+        if token.is_completed:
+            messages.info(request, 'This reviewer has already completed their feedback.')
+            return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+        # Build feedback URL
+        feedback_url = request.build_absolute_uri(
+            f'/feedback/{token.token}/'
+        )
+
+        # Render email
+        context = {
+            'reviewee_name': cycle.reviewee.name,
+            'questionnaire_name': cycle.questionnaire.name,
+            'feedback_url': feedback_url,
+            'category': token.get_category_display(),
+        }
+
+        html_content = render_to_string('emails/reviewer_reminder.html', context)
+        text_content = render_to_string('emails/reviewer_reminder.txt', context)
+
+        # Send email
+        from_email = settings.DEFAULT_FROM_EMAIL
+        subject = f'Reminder: Feedback Request for {cycle.reviewee.name}'
+
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=from_email,
+            to=[token.reviewer_email]
+        )
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+
+        # Update last reminder sent timestamp
+        from django.utils import timezone
+        token.last_reminder_sent_at = timezone.now()
+        token.save()
+
+        messages.success(request, f'Reminder sent to reviewer.')
+
+    except ReviewerToken.DoesNotExist:
+        messages.error(request, 'Reviewer token not found.')
+    except Exception as e:
+        messages.error(request, f'Error sending reminder: {str(e)}')
+
+    return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+
+@login_required
+@require_POST
+def remove_reviewer_token(request, cycle_uuid, token_id):
+    """Remove a reviewer token from a cycle (only if not started) - Admin only"""
+    # Check organization admin permission
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to remove reviewers.')
+        return redirect('review_cycle_detail', cycle_uuid=cycle_uuid)
+
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    try:
+        # Get the specific token
+        token = ReviewerToken.objects.get(id=token_id, cycle=cycle)
+
+        # Only allow deletion if reviewer hasn't started (no claimed_at or completed_at)
+        if token.claimed_at or token.completed_at:
+            messages.error(request, 'Cannot remove: reviewer has already started or completed their feedback.')
+            return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+        # Store info for success message
+        category = token.get_category_display()
+        email = token.reviewer_email if token.reviewer_email else "unclaimed token"
+
+        # Delete the token
+        token.delete()
+
+        messages.success(request, f'Removed {category} reviewer ({email}) from cycle.')
+
+        # Check if all remaining tokens are completed
+        remaining_tokens = cycle.tokens.all()
+        if remaining_tokens.exists():
+            all_completed = not remaining_tokens.filter(completed_at__isnull=True).exists()
+
+            if all_completed and cycle.status == 'active':
+                # Auto-close the cycle
+                cycle.status = 'completed'
+                cycle.save()
+
+                # Auto-generate report
+                from reports.services import generate_report, send_report_ready_notification
+                try:
+                    report = generate_report(cycle)
+
+                    # Send notification email if organization setting enabled
+                    organization = cycle.reviewee.organization
+                    if organization and organization.auto_send_report_email:
+                        email_stats = send_report_ready_notification(report, request)
+                        if email_stats.get('errors'):
+                            print(f"Errors sending report email for cycle {cycle.id}: {email_stats['errors']}")
+
+                    messages.success(request, 'Cycle automatically closed and report generated (all remaining reviewers completed).')
+                except Exception as e:
+                    # Log error but don't fail the removal
+                    print(f"Error auto-generating report for cycle {cycle.id}: {e}")
+                    messages.warning(request, f'Cycle closed but error generating report: {str(e)}')
+
+    except ReviewerToken.DoesNotExist:
+        messages.error(request, 'Reviewer token not found.')
+    except Exception as e:
+        messages.error(request, f'Error removing reviewer: {str(e)}')
+
+    return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+
+@login_required
+@require_POST
+def send_report_email(request, cycle_uuid):
+    """Send report notification email to reviewee"""
+    from reports.services import send_report_ready_notification
+
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    # Check if report exists
+    try:
+        report = Report.objects.get(cycle=cycle)
+    except Report.DoesNotExist:
+        messages.error(request, 'No report found for this cycle. Please generate the report first.')
+        return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+    # Send notification email
+    email_stats = send_report_ready_notification(report, request)
+
+    if email_stats['sent'] > 0:
+        messages.success(request, f'Report email sent to {cycle.reviewee.name} at {cycle.reviewee.email}.')
+    else:
+        if email_stats['errors']:
+            for error in email_stats['errors']:
+                messages.error(request, f'Failed to send email: {error}')
+        else:
+            messages.error(request, 'Failed to send email.')
+
+    return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+
+@login_required
+def settings_view(request):
+    """Organization and SMTP settings page"""
+    # Use the organization from the middleware (set based on user's profile)
+    organization = request.organization
+
+    if not organization:
+        messages.error(request, 'No organization found. Please run setup first.')
+        return redirect('admin_dashboard')
+
+    # Fields the environment owns are read-only here — setup_organization
+    # rewrites them on every container start, so an edit made here would
+    # silently disappear on the next restart.
+    locked = env_managed_fields()
+
+    def editable(field):
+        return field not in locked
+
+    if request.method == 'POST':
+        # Check permission to modify organization settings
+        if not request.user.has_perm('accounts.can_manage_organization'):
+            messages.error(request, 'You do not have permission to modify organization settings.')
+            return redirect('settings')
+
+        # Get which section is being updated
+        section = request.POST.get('section', 'all')
+
+        try:
+            if section == 'organization':
+                # Update organization details
+                if editable('name'):
+                    organization.name = request.POST.get('name', organization.name)
+                if editable('email'):
+                    organization.email = request.POST.get('email', organization.email)
+                organization.save()
+                messages.success(request, 'Organization details updated successfully.')
+
+            elif section == 'registration':
+                # Update registration settings
+                organization.allow_registration = request.POST.get('allow_registration') == 'on'
+                organization.default_users_can_create_cycles = request.POST.get('default_users_can_create_cycles') == 'on'
+                organization.save()
+                messages.success(request, 'Registration settings updated successfully.')
+
+            elif section == 'reports':
+                # Update report settings
+                min_responses = request.POST.get('min_responses_for_anonymity', 3)
+                try:
+                    organization.min_responses_for_anonymity = int(min_responses)
+                except (ValueError, TypeError):
+                    organization.min_responses_for_anonymity = 3
+                organization.auto_send_report_email = request.POST.get('auto_send_report_email') == 'on'
+                organization.save()
+                messages.success(request, 'Report settings updated successfully.')
+
+            elif section == 'email':
+                # Update SMTP settings
+                if editable('smtp_host'):
+                    organization.smtp_host = request.POST.get('smtp_host', '')
+                if editable('smtp_port'):
+                    try:
+                        organization.smtp_port = int(request.POST.get('smtp_port', 587))
+                    except (ValueError, TypeError):
+                        organization.smtp_port = 587
+                if editable('smtp_username'):
+                    organization.smtp_username = request.POST.get('smtp_username', '')
+
+                # Only update password if provided
+                smtp_password = request.POST.get('smtp_password', '')
+                if smtp_password and editable('smtp_password'):
+                    organization.smtp_password = smtp_password
+
+                if editable('smtp_use_tls'):
+                    organization.smtp_use_tls = request.POST.get('smtp_use_tls') == 'on'
+                if editable('from_email'):
+                    organization.from_email = request.POST.get('from_email', organization.from_email)
+                organization.save()
+                messages.success(request, 'Email settings updated successfully.')
+
+            if locked:
+                messages.info(request, (
+                    'Some settings are managed by environment variables and were '
+                    'not changed: ' + ', '.join(sorted(set(locked.values())))
+                ))
+
+            return redirect('settings')
+        except Exception as e:
+            messages.error(request, f'Error updating settings: {str(e)}')
+
+    # Get subscription information if exists
+    subscription = None
+    try:
+        from subscriptions.models import Subscription
+        subscription = organization.subscription
+        print(f"DEBUG: Found subscription for {organization.name}: {subscription.plan.name} - {subscription.status}")
+    except (Subscription.DoesNotExist, AttributeError) as e:
+        print(f"DEBUG: No subscription for {organization.name}: {type(e).__name__}")
+    except Exception as e:
+        print(f"DEBUG: Error getting subscription: {type(e).__name__}: {e}")
+
+    print(f"DEBUG: Passing subscription to template: {subscription}")
+
+    # Check if current user has organization admin permission
+    is_org_admin = request.user.has_perm('accounts.can_manage_organization')
+
+    # Count total admin users
+    from accounts.models import UserProfile
+    admin_profiles = UserProfile.objects.for_organization(organization).select_related('user')
+    admin_count = sum(1 for p in admin_profiles if p.user.has_perm('accounts.can_manage_organization'))
+
+    # Get API tokens and webhooks for this organization
+    from api.models import APIToken, WebhookEndpoint
+    api_tokens = APIToken.objects.for_organization(organization).order_by('-created_at')
+    webhooks = WebhookEndpoint.objects.for_organization(organization).order_by('-created_at')
+
+    # Check if there's a newly created token to display
+    new_token = request.session.pop('new_api_token', None)
+    new_token_name = request.session.pop('new_api_token_name', None)
+
+    context = {
+        'organization': organization,
+        'subscription': subscription,
+        'is_org_admin': is_org_admin,
+        'admin_count': admin_count,
+        'is_last_admin': is_org_admin and admin_count == 1,
+        'api_tokens': api_tokens,
+        'webhooks': webhooks,
+        'new_token': new_token,
+        'new_token_name': new_token_name,
+        'locked_fields': locked,
+    }
+
+    return render(request, 'admin_dashboard/settings.html', context)
+
+
+@login_required
+def gdpr_management(request):
+    """GDPR data management and deletion for organization admins"""
+    # Check permission
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to access GDPR management.')
+        return redirect('team_list')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('admin_dashboard')
+
+    # Get tab parameter (users or reviewees)
+    active_tab = request.GET.get('tab', 'reviewees')
+
+    # Get per_page from request
+    per_page = request.GET.get('per_page', '25')
+    try:
+        per_page = int(per_page)
+        if per_page not in [25, 50, 100]:
+            per_page = 25
+    except (ValueError, TypeError):
+        per_page = 25
+
+    if active_tab == 'users':
+        # List users with data summaries (include GDPR-deleted for audit purposes)
+        users_qs = UserProfile.objects.for_organization(
+            org, include_deleted=True
+        ).select_related('user').order_by('-user__date_joined')
+
+        # Paginate
+        paginator = Paginator(users_qs, per_page)
+        page = request.GET.get('page')
+        try:
+            users = paginator.page(page)
+        except PageNotAnInteger:
+            users = paginator.page(1)
+        except EmptyPage:
+            users = paginator.page(paginator.num_pages)
+
+        # Add data summaries
+        for user_profile in users:
+            try:
+                user_profile.gdpr_summary = GDPRDeletionService.get_user_data_summary(user_profile.user.id)
+            except:
+                user_profile.gdpr_summary = None
+
+        context = {
+            'active_tab': 'users',
+            'users': users,
+            'reviewees': None,
+            'per_page': per_page,
+        }
+    else:
+        # List reviewees with data summaries (include GDPR-deleted for audit purposes)
+        reviewees_qs = Reviewee.objects.for_organization(org, include_deleted=True).select_related('organization').order_by('-created_at')
+
+        # Paginate
+        paginator = Paginator(reviewees_qs, per_page)
+        page = request.GET.get('page')
+        try:
+            reviewees = paginator.page(page)
+        except PageNotAnInteger:
+            reviewees = paginator.page(1)
+        except EmptyPage:
+            reviewees = paginator.page(paginator.num_pages)
+
+        # Add data summaries
+        for reviewee in reviewees:
+            try:
+                reviewee.gdpr_summary = GDPRDeletionService.get_reviewee_data_summary(reviewee.id)
+            except:
+                reviewee.gdpr_summary = None
+
+        context = {
+            'active_tab': 'reviewees',
+            'users': None,
+            'reviewees': reviewees,
+            'per_page': per_page,
+        }
+
+    return render(request, 'admin_dashboard/gdpr_management.html', context)
+
+
+@login_required
+@require_POST
+def gdpr_delete_user_view(request, user_id):
+    """Delete or anonymize a user (GDPR)"""
+    # Check permission
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to delete users.')
+        return redirect('gdpr_management')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('admin_dashboard')
+
+    try:
+        # Get the user profile to verify organization
+        user_profile = get_object_or_404(UserProfile, user_id=user_id, organization=org)
+        target_user = user_profile.user
+
+        # Prevent self-deletion
+        if target_user.id == request.user.id:
+            messages.error(request, 'You cannot delete your own account.')
+            return redirect('gdpr_management')
+
+        # Prevent deleting superusers
+        if target_user.is_superuser:
+            messages.error(request, 'Cannot delete super admin accounts.')
+            return redirect('gdpr_management')
+
+        # Get deletion type from POST
+        deletion_type = request.POST.get('deletion_type', 'soft')
+        hard_delete = (deletion_type == 'hard')
+
+        # Perform deletion
+        result = GDPRDeletionService.delete_user(
+            user_id=target_user.id,
+            hard_delete=hard_delete,
+            performed_by=request.user
+        )
+
+        if result['status'] == 'deleted':
+            messages.success(request, f'User {result["username"]} has been permanently deleted.')
+        else:
+            messages.success(request, f'User {result["username"]} has been anonymized.')
+
+    except Exception as e:
+        messages.error(request, f'Error deleting user: {str(e)}')
+
+    return HttpResponseRedirect(reverse('gdpr_management') + '?tab=users')
+
+
+@login_required
+@require_POST
+def gdpr_delete_reviewee_view(request, reviewee_id):
+    """Delete or anonymize a reviewee (GDPR)"""
+    # Check permission
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to delete reviewees.')
+        return redirect('gdpr_management')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('admin_dashboard')
+
+    try:
+        # Get the reviewee to verify organization
+        reviewee = get_object_or_404(Reviewee, id=reviewee_id, organization=org)
+
+        # Get deletion type from POST
+        deletion_type = request.POST.get('deletion_type', 'soft')
+
+        if deletion_type == 'full_anonymization':
+            # Full anonymization (reviewee + reviewer emails)
+            result = GDPRDeletionService.delete_reviewee_and_anonymize_reviewer_emails(
+                reviewee_id=reviewee.id,
+                performed_by=request.user
+            )
+            messages.success(
+                request,
+                f'Reviewee {result["name"]} and all associated reviewer emails have been anonymized. '
+                f'{result.get("reviewer_emails_anonymized", 0)} reviewer email(s) anonymized.'
+            )
+        else:
+            # Soft or hard delete
+            hard_delete = (deletion_type == 'hard')
+            result = GDPRDeletionService.delete_reviewee(
+                reviewee_id=reviewee.id,
+                hard_delete=hard_delete,
+                performed_by=request.user
+            )
+
+            if result['status'] == 'deleted':
+                messages.success(
+                    request,
+                    f'Reviewee {result["name"]} has been permanently deleted along with '
+                    f'{result["review_cycles_affected"]} review cycle(s) and all associated data.'
+                )
+            else:
+                messages.success(
+                    request,
+                    f'Reviewee {result["name"]} has been anonymized. '
+                    f'{result["review_cycles_affected"]} review cycle(s) preserved.'
+                )
+
+    except Exception as e:
+        messages.error(request, f'Error deleting reviewee: {str(e)}')
+
+    return redirect('gdpr_management')
+
+
+# ============================================================================
+# PRODUCT REVIEW MANAGEMENT
+# ============================================================================
+
+@login_required
+def product_review_list(request):
+    """List and manage product reviews"""
+    from productreviews.models import ProductReview
+    from django.db.models import Avg, Count
+
+    org = request.organization
+
+    # Get all product reviews (not org-scoped - these are reviews of Blik as a product)
+    # Use .all() to explicitly avoid any organization filtering from the manager
+    reviews_qs = ProductReview.objects.all().filter(is_active=True)
+
+    # Filter by status if provided
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        reviews_qs = reviews_qs.filter(status=status_filter)
+
+    # Order by created date (newest first) to show pending reviews at top
+    # Pending reviews don't have published_date, so ordering by created_at ensures they appear first
+    reviews_qs = reviews_qs.order_by('-created_at')
+
+    # Calculate aggregate stats
+    stats = reviews_qs.aggregate(
+        avg_rating=Avg('rating'),
+        total_count=Count('id'),
+        approved_count=Count('id', filter=Q(status='approved')),
+        pending_count=Count('id', filter=Q(status='pending')),
+    )
+
+    # Get per_page from request, default to 25
+    per_page = request.GET.get('per_page', '25')
+    try:
+        per_page = int(per_page)
+        if per_page not in [25, 50, 100]:
+            per_page = 25
+    except (ValueError, TypeError):
+        per_page = 25
+
+    # Paginate reviews
+    paginator = Paginator(reviews_qs, per_page)
+    page = request.GET.get('page')
+    try:
+        reviews = paginator.page(page)
+    except PageNotAnInteger:
+        reviews = paginator.page(1)
+    except EmptyPage:
+        reviews = paginator.page(paginator.num_pages)
+
+    context = {
+        'reviews': reviews,
+        'stats': stats,
+        'status_filter': status_filter,
+        'per_page': per_page,
+    }
+
+    return render(request, 'admin_dashboard/product_review_list.html', context)
+
+
+@login_required
+def product_review_create(request):
+    """Create a new product review"""
+    from productreviews.models import ProductReview
+    from datetime import date
+
+    if not request.user.is_superuser:
+        messages.error(request, 'You do not have permission to create product reviews.')
+        return redirect('product_review_list')
+
+    if request.method == 'POST':
+        rating = request.POST.get('rating')
+        review_title = request.POST.get('review_title')
+        review_text = request.POST.get('review_text')
+        reviewer_name = request.POST.get('reviewer_name')
+        reviewer_title = request.POST.get('reviewer_title', '')
+        reviewer_company = request.POST.get('reviewer_company', '')
+        reviewer_email = request.POST.get('reviewer_email')
+        verified_customer = request.POST.get('verified_customer') == 'on'
+        featured = request.POST.get('featured') == 'on'
+        status = request.POST.get('status', 'pending')
+        source = request.POST.get('source', '')
+        notes = request.POST.get('notes', '')
+
+        # Validation
+        if not all([rating, review_title, review_text, reviewer_name, reviewer_email]):
+            messages.error(request, 'Please fill in all required fields.')
+            return render(request, 'admin_dashboard/product_review_form.html', {
+                'action': 'Create',
+                'review': request.POST,
+            })
+
+        try:
+            rating = int(rating)
+            if rating < 1 or rating > 5:
+                raise ValueError('Rating must be between 1 and 5')
+        except (ValueError, TypeError):
+            messages.error(request, 'Invalid rating value.')
+            return render(request, 'admin_dashboard/product_review_form.html', {
+                'action': 'Create',
+                'review': request.POST,
+            })
+
+        # Create the review
+        review = ProductReview.objects.create(
+            organization=request.organization,
+            rating=rating,
+            review_title=review_title,
+            review_text=review_text,
+            reviewer_name=reviewer_name,
+            reviewer_title=reviewer_title,
+            reviewer_company=reviewer_company,
+            reviewer_email=reviewer_email,
+            verified_customer=verified_customer,
+            featured=featured,
+            status=status,
+            source=source,
+            notes=notes,
+            published_date=date.today() if status == 'approved' else None,
+        )
+
+        messages.success(request, f'Product review from "{reviewer_name}" created successfully.')
+        return redirect('product_review_detail', review_id=review.id)
+
+    return render(request, 'admin_dashboard/product_review_form.html', {'action': 'Create'})
+
+
+@login_required
+def product_review_detail(request, review_id):
+    """View product review details"""
+    from productreviews.models import ProductReview
+
+    review = get_object_or_404(
+        ProductReview.objects,
+        id=review_id
+    )
+
+    context = {
+        'review': review,
+    }
+
+    return render(request, 'admin_dashboard/product_review_detail.html', context)
+
+
+@login_required
+def product_review_edit(request, review_id):
+    """Edit an existing product review"""
+    from productreviews.models import ProductReview
+    from datetime import date
+
+    if not request.user.is_superuser:
+        messages.error(request, 'You do not have permission to edit product reviews.')
+        return redirect('product_review_list')
+
+    review = get_object_or_404(
+        ProductReview.objects.all(),
+        id=review_id
+    )
+
+    if request.method == 'POST':
+        rating = request.POST.get('rating')
+        review_title = request.POST.get('review_title')
+        review_text = request.POST.get('review_text')
+        reviewer_name = request.POST.get('reviewer_name')
+        reviewer_title = request.POST.get('reviewer_title', '')
+        reviewer_company = request.POST.get('reviewer_company', '')
+        reviewer_email = request.POST.get('reviewer_email')
+        verified_customer = request.POST.get('verified_customer') == 'on'
+        featured = request.POST.get('featured') == 'on'
+        status = request.POST.get('status', 'pending')
+        source = request.POST.get('source', '')
+        notes = request.POST.get('notes', '')
+
+        # Validation
+        if not all([rating, review_title, review_text, reviewer_name, reviewer_email]):
+            messages.error(request, 'Please fill in all required fields.')
+            return render(request, 'admin_dashboard/product_review_form.html', {
+                'action': 'Edit',
+                'review': review,
+            })
+
+        try:
+            rating = int(rating)
+            if rating < 1 or rating > 5:
+                raise ValueError('Rating must be between 1 and 5')
+        except (ValueError, TypeError):
+            messages.error(request, 'Invalid rating value.')
+            return render(request, 'admin_dashboard/product_review_form.html', {
+                'action': 'Edit',
+                'review': review,
+            })
+
+        # Update the review
+        old_status = review.status
+        review.rating = rating
+        review.review_title = review_title
+        review.review_text = review_text
+        review.reviewer_name = reviewer_name
+        review.reviewer_title = reviewer_title
+        review.reviewer_company = reviewer_company
+        review.reviewer_email = reviewer_email
+        review.verified_customer = verified_customer
+        review.featured = featured
+        review.status = status
+        review.source = source
+        review.notes = notes
+
+        # Set published date when approved
+        if status == 'approved' and old_status != 'approved':
+            review.published_date = date.today()
+
+        review.save()
+
+        messages.success(request, f'Product review updated successfully.')
+        return redirect('product_review_detail', review_id=review.id)
+
+    return render(request, 'admin_dashboard/product_review_form.html', {
+        'action': 'Edit',
+        'review': review,
+    })
+
+
+@login_required
+def product_review_delete(request, review_id):
+    """Delete (soft delete) a product review"""
+    from productreviews.models import ProductReview
+
+    if not request.user.is_superuser:
+        messages.error(request, 'You do not have permission to delete product reviews.')
+        return redirect('product_review_list')
+
+    review = get_object_or_404(
+        ProductReview.objects.all(),
+        id=review_id
+    )
+
+    if request.method == 'POST':
+        # Soft delete
+        review.is_active = False
+        review.save()
+
+        messages.success(request, f'Product review from "{review.reviewer_name}" has been deleted.')
+        return redirect('product_review_list')
+
+    return render(request, 'admin_dashboard/product_review_confirm_delete.html', {
+        'review': review,
+    })
+
+
+@login_required
+def quick_product_review(request):
+    """
+    Quick review submission for logged-in users.
+    Pre-fills user information from their profile.
+    """
+    from productreviews.models import ProductReview
+    from datetime import date
+
+    user = request.user
+    org = request.organization
+
+    # Check if user has already submitted a review (global, not org-scoped)
+    existing_review = ProductReview.objects.filter(
+        reviewer_email=user.email,
+        is_active=True
+    ).first()
+
+    if request.method == 'POST':
+        rating = request.POST.get('rating')
+        review_title = request.POST.get('review_title', '').strip()
+        review_text = request.POST.get('review_text', '').strip()
+
+        # Validation - only rating is required
+        if not rating:
+            messages.error(request, 'Please select a rating.')
+            return render(request, 'admin_dashboard/quick_product_review.html', {
+                'existing_review': existing_review,
+            })
+
+        try:
+            rating = int(rating)
+            if rating < 1 or rating > 5:
+                raise ValueError('Rating must be between 1 and 5')
+        except (ValueError, TypeError):
+            messages.error(request, 'Invalid rating value.')
+            return render(request, 'admin_dashboard/quick_product_review.html', {
+                'existing_review': existing_review,
+            })
+
+        # Generate default title/text if not provided
+        if not review_title:
+            review_title = f"{rating}-star review"
+        if not review_text:
+            review_text = f"Rated {rating} out of 5 stars."
+
+        # Get user profile info
+        user_profile = user.userprofile if hasattr(user, 'userprofile') else None
+        reviewer_name = user.get_full_name() or user.username
+        reviewer_email = user.email
+
+        # Create or update review
+        if existing_review:
+            # Update existing review
+            existing_review.rating = rating
+            existing_review.review_title = review_title
+            existing_review.review_text = review_text
+            existing_review.status = 'pending'  # Reset to pending for re-approval
+            existing_review.save()
+            messages.success(request, 'Your review has been updated and is pending approval. Thank you!')
+        else:
+            # Create new review
+            ProductReview.objects.create(
+                organization=org,
+                rating=rating,
+                review_title=review_title,
+                review_text=review_text,
+                reviewer_name=reviewer_name,
+                reviewer_email=reviewer_email,
+                verified_customer=True,  # They're logged-in users, so verified
+                status='pending',
+                source='Dashboard Quick Review',
+            )
+            messages.success(request, 'Thank you for your review! It will be published after approval.')
+
+        return redirect('admin_dashboard')
+
+    context = {
+        'existing_review': existing_review,
+        'user_name': user.get_full_name() or user.username,
+        'user_email': user.email,
+    }
+
+    return render(request, 'admin_dashboard/quick_product_review.html', context)
+
+
+@login_required
+@require_POST
+def product_review_approve(request, review_id):
+    """Quick approve a product review"""
+    from productreviews.models import ProductReview
+    from datetime import date
+
+    if not request.user.is_superuser:
+        messages.error(request, 'You do not have permission to approve reviews.')
+        return redirect('product_review_list')
+
+    review = get_object_or_404(
+        ProductReview.objects.all(),
+        id=review_id
+    )
+
+    review.status = 'approved'
+    if not review.published_date:
+        review.published_date = date.today()
+    review.save()
+
+    messages.success(request, f'Review from "{review.reviewer_name}" approved successfully.')
+    return redirect('product_review_list')
+
+
+@login_required
+@require_POST
+def product_review_reject(request, review_id):
+    """Quick reject a product review"""
+    from productreviews.models import ProductReview
+
+    if not request.user.is_superuser:
+        messages.error(request, 'You do not have permission to reject reviews.')
+        return redirect('product_review_list')
+
+    review = get_object_or_404(
+        ProductReview.objects.all(),
+        id=review_id
+    )
+
+    review.status = 'rejected'
+    review.save()
+
+    messages.success(request, f'Review from "{review.reviewer_name}" rejected.')
+    return redirect('product_review_list')
+
+
+# =============================================================================
+# API TOKEN & WEBHOOK MANAGEMENT
+# =============================================================================
+
+@login_required
+def create_api_token(request):
+    """Create a new API token"""
+    if request.method != 'POST':
+        return redirect('settings')
+
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'Permission denied.')
+        return redirect('settings')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('settings')
+
+    from api.models import APIToken
+
+    name = request.POST.get('name')
+    rate_limit = request.POST.get('rate_limit', 1000)
+    is_active = request.POST.get('is_active') == 'on'
+
+    try:
+        token = APIToken.objects.create(
+            organization=org,
+            created_by=request.user,
+            name=name,
+            rate_limit=int(rate_limit),
+            is_active=is_active
+        )
+
+        # Redirect to settings with token in session (will be displayed in modal)
+        request.session['new_api_token'] = token.token
+        request.session['new_api_token_name'] = name
+    except Exception as e:
+        messages.error(request, f'Error creating API token: {str(e)}')
+
+    return redirect('settings')
+
+
+@login_required
+def update_api_token(request, token_id):
+    """Update an existing API token"""
+    if request.method != 'POST':
+        return redirect('settings')
+
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'Permission denied.')
+        return redirect('settings')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('settings')
+
+    from api.models import APIToken
+
+    try:
+        token = APIToken.objects.for_organization(org).get(id=token_id)
+
+        token.name = request.POST.get('name', token.name)
+        token.rate_limit = int(request.POST.get('rate_limit', token.rate_limit))
+        token.is_active = request.POST.get('is_active') == 'on'
+        token.save()
+
+        messages.success(request, 'API token updated successfully.')
+    except APIToken.DoesNotExist:
+        messages.error(request, 'API token not found.')
+    except Exception as e:
+        messages.error(request, f'Error updating API token: {str(e)}')
+
+    return redirect('settings')
+
+
+@login_required
+def delete_api_token(request, token_id):
+    """Delete (revoke) an API token"""
+    if request.method != 'POST':
+        return redirect('settings')
+
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'Permission denied.')
+        return redirect('settings')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('settings')
+
+    from api.models import APIToken
+
+    try:
+        token = APIToken.objects.for_organization(org).get(id=token_id)
+        token_name = token.name
+        token.delete()
+
+        messages.success(request, f'API token "{token_name}" revoked successfully.')
+    except APIToken.DoesNotExist:
+        messages.error(request, 'API token not found.')
+    except Exception as e:
+        messages.error(request, f'Error revoking API token: {str(e)}')
+
+    return redirect('settings')
+
+
+@login_required
+def create_webhook(request):
+    """Create a new webhook endpoint"""
+    if request.method != 'POST':
+        return redirect('settings')
+
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'Permission denied.')
+        return redirect('settings')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('settings')
+
+    from api.models import WebhookEndpoint
+
+    name = request.POST.get('name')
+    url = request.POST.get('url')
+    events = request.POST.getlist('events')  # Get multiple checkboxes
+    is_active = request.POST.get('is_active') == 'on'
+
+    try:
+        webhook = WebhookEndpoint.objects.create(
+            organization=org,
+            created_by=request.user,
+            name=name,
+            url=url,
+            events=events,
+            is_active=is_active
+        )
+
+        messages.success(request, f'Webhook "{name}" created successfully.')
+    except Exception as e:
+        messages.error(request, f'Error creating webhook: {str(e)}')
+
+    return redirect('settings')
+
+
+@login_required
+def update_webhook(request, webhook_id):
+    """Update an existing webhook endpoint"""
+    if request.method != 'POST':
+        return redirect('settings')
+
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'Permission denied.')
+        return redirect('settings')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('settings')
+
+    from api.models import WebhookEndpoint
+
+    try:
+        webhook = WebhookEndpoint.objects.for_organization(org).get(id=webhook_id)
+
+        webhook.name = request.POST.get('name', webhook.name)
+        webhook.url = request.POST.get('url', webhook.url)
+        webhook.events = request.POST.getlist('events')
+        webhook.is_active = request.POST.get('is_active') == 'on'
+        webhook.save()
+
+        messages.success(request, f'Webhook "{webhook.name}" updated successfully.')
+    except WebhookEndpoint.DoesNotExist:
+        messages.error(request, 'Webhook not found.')
+    except Exception as e:
+        messages.error(request, f'Error updating webhook: {str(e)}')
+
+    return redirect('settings')
+
+
+@login_required
+def delete_webhook(request, webhook_id):
+    """Delete a webhook endpoint"""
+    if request.method != 'POST':
+        return redirect('settings')
+
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'Permission denied.')
+        return redirect('settings')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('settings')
+
+    from api.models import WebhookEndpoint
+
+    try:
+        webhook = WebhookEndpoint.objects.for_organization(org).get(id=webhook_id)
+        webhook_name = webhook.name
+        webhook.delete()
+
+        messages.success(request, f'Webhook "{webhook_name}" deleted successfully.')
+    except WebhookEndpoint.DoesNotExist:
+        messages.error(request, 'Webhook not found.')
+    except Exception as e:
+        messages.error(request, f'Error deleting webhook: {str(e)}')
+
+    return redirect('settings')

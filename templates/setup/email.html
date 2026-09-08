@@ -1,0 +1,125 @@
+{% extends "setup/base.html" %}
+
+{% block title %}Email Configuration - Blik Setup{% endblock %}
+
+{% block subtitle %}Configure email settings for sending invitations{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Email Configuration</h2>
+<p class="page-description">
+    Choose how Blik will send emails for review invitations and notifications.
+</p>
+
+{% if has_subscription %}
+<div class="info-card">
+    <h3>✨ Recommended: Use Blik's Email Service</h3>
+    <p>
+        As a SaaS customer, you can use Blik's managed email service. All emails will be sent reliably with no configuration needed.
+        You can always switch to your own SMTP server later in settings.
+    </p>
+    <form method="post" style="margin: 0;">
+        {% csrf_token %}
+        <input type="hidden" name="use_blik_mailer" value="true">
+        <button type="submit" class="btn btn-primary" style="margin: 0;">
+            Use Blik's Email Service (Recommended)
+        </button>
+    </form>
+</div>
+
+<div class="separator">
+    — or configure your own SMTP server below —
+</div>
+{% endif %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    <div class="form-group">
+        <label for="id_smtp_host">{{ form.smtp_host.label }}</label>
+        {{ form.smtp_host }}
+        {% if form.smtp_host.errors %}
+            <ul class="errorlist">
+            {% for error in form.smtp_host.errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+        <small class="help-text">{{ form.smtp_host.help_text }}</small>
+    </div>
+
+    <div class="form-group">
+        <label for="id_smtp_port">{{ form.smtp_port.label }}</label>
+        {{ form.smtp_port }}
+        {% if form.smtp_port.errors %}
+            <ul class="errorlist">
+            {% for error in form.smtp_port.errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+        <small class="help-text">{{ form.smtp_port.help_text }}</small>
+    </div>
+
+    <div class="form-group">
+        <label for="id_smtp_username">{{ form.smtp_username.label }}</label>
+        {{ form.smtp_username }}
+        {% if form.smtp_username.errors %}
+            <ul class="errorlist">
+            {% for error in form.smtp_username.errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+        <small class="help-text">{{ form.smtp_username.help_text }}</small>
+    </div>
+
+    <div class="form-group">
+        <label for="id_smtp_password">{{ form.smtp_password.label }}</label>
+        {{ form.smtp_password }}
+        {% if form.smtp_password.errors %}
+            <ul class="errorlist">
+            {% for error in form.smtp_password.errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+        <small class="help-text">{{ form.smtp_password.help_text }}</small>
+    </div>
+
+    <div class="form-group">
+        <div class="form-check">
+            {{ form.smtp_use_tls }}
+            <label for="id_smtp_use_tls">{{ form.smtp_use_tls.label }}</label>
+        </div>
+        <small class="help-text">{{ form.smtp_use_tls.help_text }}</small>
+    </div>
+
+    <div class="form-group">
+        <label for="id_from_email">{{ form.from_email.label }}</label>
+        {{ form.from_email }}
+        {% if form.from_email.errors %}
+            <ul class="errorlist">
+            {% for error in form.from_email.errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+        <small class="help-text">{{ form.from_email.help_text }}</small>
+    </div>
+
+    <div class="form-group">
+        <div class="form-check">
+            {{ form.skip_email_setup }}
+            <label for="id_skip_email_setup">{{ form.skip_email_setup.label }}</label>
+        </div>
+        <small class="help-text">{{ form.skip_email_setup.help_text }}</small>
+    </div>
+
+    <div class="button-group">
+        <div></div>
+        <button type="submit" class="btn btn-primary">
+            Complete Setup →
+        </button>
+    </div>
+</form>
+{% endblock %}

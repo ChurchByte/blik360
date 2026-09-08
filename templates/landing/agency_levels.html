@@ -1,0 +1,1460 @@
+{% extends 'landing/base.html' %}
+{% load static landing_tags %}
+
+{% block meta %}
+    <title>5 Levels of Agency Framework for Engineering Managers | Blik</title>
+    <meta name="description" content="Stop hiring problem reporters. The 5 Levels of Agency framework—used by high-growth tech companies—teaches engineers to operate autonomously from passive (Level 1) to proactive (Level 5). Reduce manager bottlenecks, scale faster.">
+    <meta name="keywords" content="engineering manager framework, high agency employees, autonomous engineering teams, proactive problem solving, engineering leadership, reduce manager bottlenecks, tech team performance, engineering culture, agency levels, developer autonomy">
+    <meta name="author" content="Blik">
+    <link rel="canonical" href="{{ site_protocol }}://{{ site_domain }}{% landing_url 'agency_levels' %}">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ site_protocol }}://{{ site_domain }}{% landing_url 'agency_levels' %}">
+    <meta property="og:title" content="5 Levels of Agency: Build Autonomous Engineering Teams">
+    <meta property="og:description" content="Stop hiring problem reporters. Framework for engineering managers to build Level 4+ teams that solve problems autonomously.">
+    <meta property="og:site_name" content="{{ site_name }}">
+    <meta property="og:image" content="{{ site_protocol }}://{{ site_domain }}{% landing_url 'og_image' %}?title=5%20Levels%20of%20Agency&subtitle=Build%20Autonomous%20Teams">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:alt" content="5 Levels of Agency - Build Autonomous Teams">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{{ site_protocol }}://{{ site_domain }}{% landing_url 'agency_levels' %}">
+    <meta name="twitter:title" content="5 Levels of Agency: Build Autonomous Engineering Teams">
+    <meta name="twitter:description" content="Stop hiring problem reporters. Framework for engineering managers to build Level 4+ teams that solve problems autonomously.">
+    <meta name="twitter:image" content="{{ site_protocol }}://{{ site_domain }}{% landing_url 'og_image' %}?title=5%20Levels%20of%20Agency&subtitle=Build%20Autonomous%20Teams">
+{% endblock %}
+
+{% block structured_data %}
+    {% article_schema "landing/agency_levels.html" headline="5 Levels of Agency Framework for Engineering Managers" description="Stop hiring problem reporters. The 5 Levels of Agency framework teaches engineers to operate autonomously from passive (Level 1) to proactive (Level 5). Reduce manager bottlenecks, scale faster." canonical_url=request.build_absolute_uri author_name="Thijs de Zoete" image_url=request.build_absolute_uri|add:"?title=5%20Levels%20of%20Agency&subtitle=Build%20Autonomous%20Teams" %}
+{% endblock %}
+
+{% block nav_links %}
+    <a href="{% landing_url 'index' %}">Home</a>
+    <a href="#framework">The Framework</a>
+    <a href="#examples">Examples</a>
+    <a href="#research">Research</a>
+    <a href="https://github.com/thijsdezoete/blik" target="_blank" rel="noopener">GitHub</a>
+{% endblock %}
+
+{% block extra_head %}
+    <!-- JSON-LD Structured Data for Article -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "5 Levels of Agency: Teaching Employees to Be Proactive Problem Solvers",
+        "description": "Framework for building high-agency teams that operate autonomously and solve problems proactively",
+        "author": {
+            "@type": "Organization",
+            "@name": "{{ site_name }}"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "@name": "{{ site_name }}"
+        },
+        "datePublished": "2025-01-01",
+        "dateModified": "2025-01-01"
+    }
+    </script>
+
+    <!-- JSON-LD Structured Data for FAQs -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "How do I set clear expectations for high-agency behavior?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Tell new hires explicitly: 'You operate at Level 4 minimum. When you spot a problem, I expect you to come with diagnosis and recommendations, not just alerts.' Make it clear from day one that you expect employees to bring solutions, not just problems."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What should I do when employees show Level 1 behavior?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "When someone reports a problem without context, don't solve it for them. Ask: 'What do you think is causing this? What solutions have you considered?' This coaching approach forces them to develop Level 4+ thinking patterns."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How can I encourage Level 5 autonomous problem-solving?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "When someone solves a problem autonomously, praise it publicly. Say 'This is exactly what high agency looks like' and make it clear this is the standard. Public recognition reinforces the behavior you want to see."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How do I make it safe for employees to operate at Level 5?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "People won't operate at Level 5 if they get punished for mistakes. Make it safe to act, fail, and learn. The cost of occasional errors is lower than the cost of learned helplessness. Create psychological safety for autonomous action."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How should I build trust with new employees?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Start new people at Level 4 (recommendations need approval). As they prove judgment, move them to Level 5 (act first, inform later). Earned autonomy works better than blanket permissions or micromanagement."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is the difference between the Dreyfus Model and the 5 Levels of Agency?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "The Dreyfus Model measures technical skill (what people know), while the 5 Levels of Agency measure ownership mindset (how people work). An engineer can be technically Expert but operate at Level 1 if they lack ownership. Conversely, a Novice can operate at Level 4 by researching thoroughly and making recommendations."
+                }
+            }
+        ]
+    }
+    </script>
+
+    <style>
+        .agency-framework-diagram {
+            max-width: 1000px;
+            margin: var(--space-12) auto;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .agency-framework-diagram svg {
+            width: 100%;
+            height: auto;
+            max-width: 100%;
+        }
+
+        .comparison-table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            margin: 2rem 0;
+            background: var(--bg-card);
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        .comparison-table th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
+        .comparison-table tbody tr {
+            background: var(--bg-card);
+        }
+
+        .comparison-table tbody tr:hover {
+            background: var(--bg-secondary);
+        }
+
+        .comparison-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-table-wrapper {
+                border: none;
+            }
+
+            .comparison-table thead {
+                display: none;
+            }
+
+            .comparison-table,
+            .comparison-table tbody,
+            .comparison-table tr,
+            .comparison-table td {
+                display: block;
+                width: 100%;
+            }
+
+            .comparison-table tr {
+                margin-bottom: 1.5rem;
+                background: var(--bg-card);
+                border-radius: var(--radius-md);
+                border: 1px solid var(--border);
+                padding: 1rem;
+                box-shadow: var(--shadow-sm);
+            }
+
+            .comparison-table td {
+                border: none;
+                padding: 0.5rem 0;
+                position: relative;
+                text-align: left;
+            }
+
+            .comparison-table td:before {
+                content: attr(data-label);
+                font-weight: 600;
+                display: block;
+                margin-bottom: 0.25rem;
+                color: var(--text-secondary);
+                font-size: 0.875rem;
+            }
+
+            .comparison-table td:first-child {
+                padding-top: 0;
+                font-weight: 600;
+                font-size: 1.05rem;
+                margin-bottom: 0.5rem;
+                padding-bottom: 0.75rem;
+                border-bottom: 1px solid var(--border);
+            }
+        }
+
+        /* Staircase Layout for Level Cards */
+        .level-cards {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+            margin-top: 3rem;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+            position: relative;
+        }
+
+        /* Each level card positioned progressively higher */
+        .level-cards > :nth-child(1) { transform: translateY(160px); }
+        .level-cards > :nth-child(2) { transform: translateY(120px); }
+        .level-cards > :nth-child(3) { transform: translateY(80px); }
+        .level-cards > :nth-child(4) { transform: translateY(40px); }
+        .level-cards > :nth-child(5) { transform: translateY(0); }
+
+        /* Add padding to prevent layout collapse */
+        .level-cards {
+            padding-bottom: 180px;
+        }
+
+        @media (max-width: 1024px) {
+            /* 2-column layout on tablets */
+            .level-cards {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1.5rem;
+            }
+
+            .level-cards > :nth-child(1) { transform: translateY(80px); }
+            .level-cards > :nth-child(2) { transform: translateY(60px); }
+            .level-cards > :nth-child(3) { transform: translateY(40px); }
+            .level-cards > :nth-child(4) { transform: translateY(20px); }
+            .level-cards > :nth-child(5) { transform: translateY(0); }
+
+            .level-cards {
+                padding-bottom: 100px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            /* Stacked on mobile with subtle staircase */
+            .level-cards {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+
+            .level-cards > :nth-child(1) { transform: translateY(0); }
+            .level-cards > :nth-child(2) { transform: translateY(0); }
+            .level-cards > :nth-child(3) { transform: translateY(0); }
+            .level-cards > :nth-child(4) { transform: translateY(0); }
+            .level-cards > :nth-child(5) { transform: translateY(0); }
+
+            .level-cards {
+                padding-bottom: 0;
+            }
+        }
+
+        .level-card {
+            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .level-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .level-card h3 {
+            margin-bottom: 0.75rem;
+            font-size: 1.125rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .level-card p {
+            margin: 0;
+            font-size: 0.9375rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .level-card-icon {
+            width: 32px;
+            height: 32px;
+            flex-shrink: 0;
+        }
+
+        /* Scenario Cards Grid */
+        .scenario-container {
+            margin-bottom: 3rem;
+        }
+
+        .scenario-header {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .scenario-header h3 {
+            margin: 0 0 0.75rem 0;
+            font-size: var(--text-2xl);
+            font-weight: 600;
+        }
+
+        .scenario-header p {
+            margin: 0;
+            font-style: italic;
+            color: var(--text-secondary);
+        }
+
+        .scenario-cards {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+        }
+
+        @media (max-width: 1200px) {
+            .scenario-cards {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1.5rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .scenario-cards {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+        }
+
+        .scenario-card {
+            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            position: relative;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .scenario-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .scenario-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid rgba(0,0,0,0.1);
+        }
+
+        .scenario-level {
+            font-weight: 700;
+            font-size: 0.875rem;
+        }
+
+        .scenario-time {
+            font-weight: 700;
+            font-size: 1.125rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-sm);
+        }
+
+        .scenario-time-red {
+            background: rgba(220, 38, 38, 0.15);
+            color: var(--danger-600);
+        }
+
+        .scenario-time-orange {
+            background: rgba(249, 115, 22, 0.15);
+            color: var(--warning-600);
+        }
+
+        .scenario-time-yellow {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning-600);
+        }
+
+        .scenario-time-green {
+            background: rgba(22, 163, 74, 0.15);
+            color: var(--success-700);
+        }
+
+        .scenario-response {
+            background: rgba(0,0,0,0.03);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            font-size: 0.9375rem;
+            line-height: 1.6;
+            position: relative;
+        }
+
+        /* Chat bubble tail */
+        .scenario-response::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 20px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid rgba(0,0,0,0.03);
+        }
+
+        [data-theme="dark"] .scenario-response {
+            background: rgba(255,255,255,0.05);
+        }
+
+        [data-theme="dark"] .scenario-response::before {
+            border-bottom-color: rgba(255,255,255,0.05);
+        }
+
+        /* Interactive Level Slider */
+        .level-slider-container {
+            max-width: 1000px;
+            margin: 4rem auto 0;
+            padding: var(--space-12);
+            background: var(--bg-card);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
+        }
+
+        .level-slider-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .level-slider-header h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: var(--text-3xl);
+            font-weight: 700;
+        }
+
+        .level-slider-header p {
+            margin: 0;
+            color: var(--text-secondary);
+        }
+
+        .slider-scenario-picker {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .slider-scenario-btn {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            border: 2px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .slider-scenario-btn:hover {
+            border-color: var(--primary);
+            background: var(--bg-card);
+        }
+
+        .slider-scenario-btn.active {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: white;
+        }
+
+        .slider-question {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            margin-bottom: 2rem;
+            text-align: center;
+            font-style: italic;
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .slider-control {
+            margin-bottom: 2rem;
+        }
+
+        .slider-track {
+            position: relative;
+            width: 100%;
+            height: 60px;
+            margin-bottom: 1rem;
+        }
+
+        .slider-input {
+            width: 100%;
+            height: 8px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--border);
+            border-radius: var(--radius-sm);
+            outline: none;
+            position: absolute;
+            top: 26px;
+        }
+
+        .slider-input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .slider-input::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+            border: none;
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 12px;
+        }
+
+        .slider-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-align: center;
+            min-width: 60px;
+        }
+
+        .slider-label.active {
+            color: var(--primary);
+            font-size: 0.875rem;
+        }
+
+        .slider-response-card {
+            padding: 2rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .slider-response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid rgba(0,0,0,0.1);
+        }
+
+        .slider-response-level {
+            font-size: var(--text-xl);
+            font-weight: 700;
+        }
+
+        .slider-response-time {
+            font-size: var(--text-2xl);
+            font-weight: 700;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+        }
+
+        .slider-response-text {
+            font-size: 1.125rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        @media (max-width: 768px) {
+            .level-slider-container {
+                padding: 2rem 1.5rem;
+            }
+
+            .slider-labels {
+                font-size: 0.65rem;
+            }
+
+            .slider-label {
+                min-width: 40px;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">The 5 Levels of Agency</h1>
+                <p class="hero-subtitle">Stop hiring problem reporters. Start building problem solvers. This framework shows you exactly how to teach employees to operate with high agency and autonomy.</p>
+
+                <!-- TL;DR Box -->
+                <div style="background: var(--bg-card); border: 2px solid var(--primary-200); padding: var(--space-8); margin: var(--space-8) 0; border-radius: var(--radius-lg); text-align: left; max-width: 800px; margin-left: auto; margin-right: auto; box-shadow: var(--shadow-sm);">
+                    <h2 style="margin: 0 0 var(--space-4) 0; font-size: var(--text-sm); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary-600);">TL;DR</h2>
+                    <p style="margin: 0 0 var(--space-4) 0; font-size: var(--text-base); line-height: 1.6; color: var(--text-primary);">Most employees spot problems and walk away. High-agency employees identify problems, investigate causes, research solutions, and fix them. The 5 Levels describe this progression: from <strong>passive reporting (Level 1) to autonomous execution (Level 5)</strong>.</p>
+                    <p style="margin: 0; font-size: var(--text-base); line-height: 1.6; color: var(--text-primary);"><strong>The standard:</strong> Tell new hires they operate at Level 4 minimum. As trust builds, they rise to Level 5.</p>
+                </div>
+
+                <!-- Stat Callout -->
+                <div style="background: var(--success); color: white; padding: var(--space-6) var(--space-8); margin: var(--space-8) auto; border-radius: var(--radius-lg); text-align: center; max-width: 600px; box-shadow: var(--shadow-md);">
+                    <p style="margin: 0; font-size: var(--text-xl); font-weight: 700; line-height: 1.4;">Level 5 engineers save managers<br>10+ hours per week</p>
+                </div>
+
+                <div class="hero-cta">
+                    <a href="#framework" class="btn btn-primary">See the Framework</a>
+                    <a href="{% landing_url 'index' %}" class="btn btn-secondary">About Blik</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- The Problem Section -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">The Problem with Most Employees</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 3rem;">They identify problems, then walk away and wait for someone else to fix them</p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-bottom: 3rem;">
+                <div class="feature-card feature-card-danger">
+                    <h3>Low Agency Behavior</h3>
+                    <ul style="list-style: none; padding: 0; color: var(--text-primary);">
+                        <li style="margin-bottom: 0.5rem;">"There's a bug in production."</li>
+                        <li style="margin-bottom: 0.5rem;">"The deployment is broken."</li>
+                        <li style="margin-bottom: 0.5rem;">"This feature doesn't work."</li>
+                        <li style="margin-bottom: 0.5rem;">Then they walk away</li>
+                        <li>Waiting for someone else to deal with it</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card feature-card-success">
+                    <h3>High Agency Behavior</h3>
+                    <ul style="list-style: none; padding: 0; color: var(--text-primary);">
+                        <li style="margin-bottom: 0.5rem;">Identifies the problem</li>
+                        <li style="margin-bottom: 0.5rem;">Investigates root causes</li>
+                        <li style="margin-bottom: 0.5rem;">Researches potential solutions</li>
+                        <li style="margin-bottom: 0.5rem;">Recommends a specific approach</li>
+                        <li>Often fixes it themselves</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="feature-card" style="background: var(--primary-600); color: white; padding: var(--space-12); text-align: center; border: 1px solid var(--primary-700);">
+                <h3 style="color: white; margin-bottom: 1rem; font-size: var(--text-2xl); font-weight: 700;">The Real Question</h3>
+                <p style="color: rgba(255,255,255,0.95); font-size: var(--text-xl);">Do you want employees who just report problems, or employees who solve them?</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- The 5 Levels Framework -->
+    <section id="framework" class="section">
+        <div class="container">
+            <h2 class="section-title">The 5 Levels of Agency</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 1.5rem;">From passive problem reporting to autonomous problem solving</p>
+
+            <!-- Quick Visual Summary Before Diagram -->
+            <div style="max-width: 700px; margin: 0 auto 3rem; background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; font-size: 0.9rem;">
+                    <div style="font-weight: 700; color: var(--primary); text-align: right;">Level 5:</div>
+                    <div>Fix it yourself + inform</div>
+                    <div style="font-weight: 700; color: var(--primary); text-align: right;">Level 4:</div>
+                    <div>Recommend specific solution</div>
+                    <div style="font-weight: 700; color: var(--primary); text-align: right;">Level 3:</div>
+                    <div>Present multiple solutions</div>
+                    <div style="font-weight: 700; color: var(--primary); text-align: right;">Level 2:</div>
+                    <div>Identify causes</div>
+                    <div style="font-weight: 700; color: var(--text-secondary); text-align: right;">Level 1:</div>
+                    <div style="color: var(--text-secondary);">Report problem, walk away</div>
+                </div>
+            </div>
+
+            <div class="agency-framework-diagram" role="img" aria-label="5 Levels of Agency pyramid diagram showing progression from Level 1 (Problem Identification - recognizing and stating a problem) to Level 5 (Problem Resolution - implementing and resolving the identified problem). Each level builds on the previous: Level 2 adds Cause Analysis, Level 3 adds Solution Exploration, Level 4 adds Solution Recommendation with justification.">
+                {% include 'components/agency_levels_svg.html' %}
+            </div>
+
+            <h3 style="text-align: center; margin: var(--space-12) 0 1.5rem; font-size: 1.25rem;">What Each Level Sounds Like</h3>
+
+            <div class="level-cards">
+                <div class="level-card level-card-1">
+                    <h3>
+                        <svg class="level-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="16" rx="2" ry="2"/>
+                            <line x1="3" y1="9" x2="21" y2="9"/>
+                        </svg>
+                        Level 1: Problem Identification
+                    </h3>
+                    <p>"There is a problem." <em>(Then you walk away and wait for someone else to handle it.)</em></p>
+                </div>
+
+                <div class="level-card level-card-2">
+                    <h3>
+                        <svg class="level-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        Level 2: Cause Analysis
+                    </h3>
+                    <p>"There is a problem, and I've found some causes." <em>(No solutions offered)</em></p>
+                </div>
+
+                <div class="level-card level-card-3">
+                    <h3>
+                        <svg class="level-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="8" y1="6" x2="21" y2="6"/>
+                            <line x1="8" y1="12" x2="21" y2="12"/>
+                            <line x1="8" y1="18" x2="21" y2="18"/>
+                            <line x1="3" y1="6" x2="3.01" y2="6"/>
+                            <line x1="3" y1="12" x2="3.01" y2="12"/>
+                            <line x1="3" y1="18" x2="3.01" y2="18"/>
+                        </svg>
+                        Level 3: Solution Exploration
+                    </h3>
+                    <p>"Here's the problem, here are some possible causes, and here are some possible solutions." <em>(No recommendation)</em></p>
+                </div>
+
+                <div class="level-card level-card-4">
+                    <h3>
+                        <svg class="level-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 19V5M5 12l7-7 7 7"/>
+                        </svg>
+                        Level 4: Solution Recommendation
+                    </h3>
+                    <p>"Here's the problem, here's what caused it, here are possible solutions, and <strong>here's the one I recommend we pick</strong>."</p>
+                </div>
+
+                <div class="level-card level-card-5">
+                    <h3>
+                        <svg class="level-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        Level 5: Problem Resolution
+                    </h3>
+                    <p>"I identified a problem, figured out what caused it, researched how to fix it, and <strong>I fixed it</strong>. Just keeping you in the loop."</p>
+                </div>
+            </div>
+
+            <div class="feature-card feature-card-info" style="margin-top: 3rem;">
+                <h3>The Standard for New Hires</h3>
+                <p style="margin-bottom: 1rem;">Here's what to tell every new employee: <strong>You will live at Level 4 from Day 1.</strong> As we build trust, you'll rise to Level 5.</p>
+                <p style="margin-bottom: 1rem;">Being high agency doesn't just mean tackling problems this way. It means your entire way of working should be oriented to being a Level 4+ employee.</p>
+                <p style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);"><strong>Agency is only one dimension.</strong> High agency at any technical skill level is valuable, but a Novice with Level 5 agency needs different support than an Expert with Level 5 agency. See how Agency combines with technical skill in the <a href="{% landing_url 'performance_matrix' %}" style="color: var(--primary); text-decoration: none; font-weight: 500;">Performance Matrix</a>.</p>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); padding-top: 1rem; border-top: 1px solid var(--border);"><strong>Read more on high agency culture:</strong> <a href="https://review.firstround.com/how-stripe-built-one-of-silicon-valleys-best-engineering-teams" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline;">How Stripe Built One of Silicon Valley's Best Engineering Teams</a> (First Round Review) | <a href="https://www.sequoiacap.com/article/high-agency/" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline;">High Agency: What It Is and Why It Matters</a> (Sequoia Capital)</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why It Matters Section -->
+    <section id="workplace" class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">Why This Matters on the Work Floor</h2>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Managers Aren't Bottlenecks</h3>
+                    <p>When everyone operates at Level 1-2, managers become overwhelmed with trivial decisions. Level 4+ employees free up management bandwidth for strategic work.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Faster Problem Resolution</h3>
+                    <p>Level 5 employees fix issues immediately instead of creating multi-day email chains. Problems get solved in hours, not weeks.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Better Context in Decisions</h3>
+                    <p>The person closest to the problem usually understands it best. Level 4+ employees leverage that proximity to make smarter choices.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Culture of Ownership</h3>
+                    <p>Teams full of Level 4+ people don't have bystander syndrome. Everyone takes responsibility for outcomes, not just their narrow job description.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Scales with Growth</h3>
+                    <p>A team of 10 Level 1 employees needs 3 managers. A team of 10 Level 5 employees might need one. High agency scales better than headcount.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Attracts Top Talent</h3>
+                    <p>High performers hate working with people who just report problems. They want teammates who solve things. Level 4+ culture becomes a recruiting advantage.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Practical Examples -->
+    <section id="examples" class="section">
+        <div class="container">
+            <h2 class="section-title">Real Examples: Same Problem, 5 Different Responses</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 2rem;">See how agency level transforms problem-solving behavior</p>
+
+            <div class="scenario-container">
+                <div class="scenario-header">
+                    <h3>Scenario: Production Bug Discovered</h3>
+                    <p>Customer reports: "Checkout is broken. I can't complete my purchase."</p>
+                </div>
+
+                <div class="scenario-cards">
+                    <div class="scenario-card level-card-1">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 1</span>
+                            <span class="scenario-time scenario-time-red">2+ hrs</span>
+                        </div>
+                        <div class="scenario-response">
+                            "Hey, there's a bug in checkout." <em>(No follow-up)</em>
+                        </div>
+                    </div>
+
+                    <div class="scenario-card level-card-2">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 2</span>
+                            <span class="scenario-time scenario-time-red">1 hr</span>
+                        </div>
+                        <div class="scenario-response">
+                            "There's a bug in checkout. Looks like the payment gateway integration is failing."
+                        </div>
+                    </div>
+
+                    <div class="scenario-card level-card-3">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 3</span>
+                            <span class="scenario-time scenario-time-yellow">30 min</span>
+                        </div>
+                        <div class="scenario-response">
+                            "Payment gateway bug. Could be API credentials, rate limiting, or version mismatch. We could roll back, switch providers temporarily, or fix the integration."
+                        </div>
+                    </div>
+
+                    <div class="scenario-card level-card-4">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 4</span>
+                            <span class="scenario-time scenario-time-green">5 min</span>
+                        </div>
+                        <div class="scenario-response">
+                            "Payment API updated their auth method yesterday. We need to update our credentials. I've tested the fix in staging. <strong>Can I deploy?</strong>"
+                        </div>
+                    </div>
+
+                    <div class="scenario-card level-card-5">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 5</span>
+                            <span class="scenario-time scenario-time-green">0 min</span>
+                        </div>
+                        <div class="scenario-response">
+                            "<strong>FYI:</strong> Payment gateway changed auth. I updated credentials, tested in staging, deployed the fix. Checkout is working. Added monitoring to catch this faster next time."
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="scenario-container">
+                <div class="scenario-header">
+                    <h3>Scenario: Customer Complaint About Slow Performance</h3>
+                    <p>Customer: "Your app takes forever to load my dashboard. This is unacceptable."</p>
+                </div>
+
+                <div class="scenario-cards">
+                    <div class="scenario-card level-card-1">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 1</span>
+                            <span class="scenario-time scenario-time-red">2+ hrs</span>
+                        </div>
+                        <div class="scenario-response">
+                            "Customer says the app is slow."
+                        </div>
+                    </div>
+
+                    <div class="scenario-card level-card-2">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 2</span>
+                            <span class="scenario-time scenario-time-orange">1 hr</span>
+                        </div>
+                        <div class="scenario-response">
+                            "App is slow for this customer. Their account has 50,000 records, which seems to be causing the issue."
+                        </div>
+                    </div>
+
+                    <div class="scenario-card level-card-3">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 3</span>
+                            <span class="scenario-time scenario-time-yellow">30 min</span>
+                        </div>
+                        <div class="scenario-response">
+                            "Large accounts are slow. We could add pagination, implement caching, or optimize the database queries."
+                        </div>
+                    </div>
+
+                    <div class="scenario-card level-card-4">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 4</span>
+                            <span class="scenario-time scenario-time-green">5 min</span>
+                        </div>
+                        <div class="scenario-response">
+                            "The query fetches all records at once. I built a pagination solution that loads 100 at a time. Tested with 100k records—loads in 200ms now. <strong>Should I ship it?</strong>"
+                        </div>
+                    </div>
+
+                    <div class="scenario-card level-card-5">
+                        <div class="scenario-card-header">
+                            <span class="scenario-level">Level 5</span>
+                            <span class="scenario-time scenario-time-green">0 min</span>
+                        </div>
+                        <div class="scenario-response">
+                            "<strong>Solved it.</strong> Implemented pagination + query optimization. All large accounts load fast now. Customer confirmed. Added performance monitoring for accounts over 10k records."
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Insight Box -->
+            <div style="max-width: 800px; margin: var(--space-12) auto 0; background: var(--primary-600); color: white; padding: var(--space-12); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); text-align: center; border: 1px solid var(--primary-700);">
+                <h3 style="color: white; margin: 0 0 1rem 0; font-size: var(--text-2xl); font-weight: 700;">Notice the Pattern</h3>
+                <p style="margin: 0; font-size: var(--text-lg); line-height: 1.6; opacity: 0.95;">Each level adds one step: identify → analyze → explore → recommend → <strong>execute</strong>. Level 5 employees don't just think differently—they <em>act</em> differently.</p>
+            </div>
+
+            <!-- Interactive Level Slider -->
+            <div class="level-slider-container">
+                <div class="level-slider-header">
+                    <h3>Try It: Explore Different Responses</h3>
+                    <p>See how the same situation changes based on agency level</p>
+                </div>
+
+                <div class="slider-scenario-picker">
+                    <button class="slider-scenario-btn active" data-scenario="0">Production Bug</button>
+                    <button class="slider-scenario-btn" data-scenario="1">Performance Issue</button>
+                    <button class="slider-scenario-btn" data-scenario="2">Feature Request</button>
+                </div>
+
+                <div class="slider-question" id="sliderQuestion">
+                    Customer reports: "Checkout is broken. I can't complete my purchase."
+                </div>
+
+                <div class="slider-control">
+                    <div class="slider-track">
+                        <input type="range" min="1" max="5" value="3" class="slider-input" id="levelSlider">
+                    </div>
+                    <div class="slider-labels">
+                        <span class="slider-label" data-level="1">Level 1</span>
+                        <span class="slider-label" data-level="2">Level 2</span>
+                        <span class="slider-label active" data-level="3">Level 3</span>
+                        <span class="slider-label" data-level="4">Level 4</span>
+                        <span class="slider-label" data-level="5">Level 5</span>
+                    </div>
+                </div>
+
+                <div class="slider-response-card level-card-3" id="sliderResponseCard">
+                    <div class="slider-response-header">
+                        <span class="slider-response-level" id="sliderLevel">Level 3: Solution Exploration</span>
+                        <span class="slider-response-time scenario-time-yellow" id="sliderTime">30 min</span>
+                    </div>
+                    <div class="slider-response-text" id="sliderResponse">
+                        "Payment gateway bug. Could be API credentials, rate limiting, or version mismatch. We could roll back, switch providers temporarily, or fix the integration."
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                (function() {
+                    const scenarios = [
+                        {
+                            question: 'Customer reports: "Checkout is broken. I can\'t complete my purchase."',
+                            responses: [
+                                { level: 'Level 1: Problem Identification', time: '2+ hrs', timeClass: 'scenario-time-red', cardClass: 'level-card-1', text: '"Hey, there\'s a bug in checkout." <em>(No follow-up)</em>' },
+                                { level: 'Level 2: Cause Analysis', time: '1 hr', timeClass: 'scenario-time-red', cardClass: 'level-card-2', text: '"There\'s a bug in checkout. Looks like the payment gateway integration is failing."' },
+                                { level: 'Level 3: Solution Exploration', time: '30 min', timeClass: 'scenario-time-yellow', cardClass: 'level-card-3', text: '"Payment gateway bug. Could be API credentials, rate limiting, or version mismatch. We could roll back, switch providers temporarily, or fix the integration."' },
+                                { level: 'Level 4: Solution Recommendation', time: '5 min', timeClass: 'scenario-time-green', cardClass: 'level-card-4', text: '"Payment API updated their auth method yesterday. We need to update our credentials. I\'ve tested the fix in staging. <strong>Can I deploy?</strong>"' },
+                                { level: 'Level 5: Problem Resolution', time: '0 min', timeClass: 'scenario-time-green', cardClass: 'level-card-5', text: '"<strong>FYI:</strong> Payment gateway changed auth. I updated credentials, tested in staging, deployed the fix. Checkout is working. Added monitoring to catch this faster next time."' }
+                            ]
+                        },
+                        {
+                            question: 'Customer: "Your app takes forever to load my dashboard. This is unacceptable."',
+                            responses: [
+                                { level: 'Level 1: Problem Identification', time: '2+ hrs', timeClass: 'scenario-time-red', cardClass: 'level-card-1', text: '"Customer says the app is slow."' },
+                                { level: 'Level 2: Cause Analysis', time: '1 hr', timeClass: 'scenario-time-orange', cardClass: 'level-card-2', text: '"App is slow for this customer. Their account has 50,000 records, which seems to be causing the issue."' },
+                                { level: 'Level 3: Solution Exploration', time: '30 min', timeClass: 'scenario-time-yellow', cardClass: 'level-card-3', text: '"Large accounts are slow. We could add pagination, implement caching, or optimize the database queries."' },
+                                { level: 'Level 4: Solution Recommendation', time: '5 min', timeClass: 'scenario-time-green', cardClass: 'level-card-4', text: '"The query fetches all records at once. I built a pagination solution that loads 100 at a time. Tested with 100k records—loads in 200ms now. <strong>Should I ship it?</strong>"' },
+                                { level: 'Level 5: Problem Resolution', time: '0 min', timeClass: 'scenario-time-green', cardClass: 'level-card-5', text: '"<strong>Solved it.</strong> Implemented pagination + query optimization. All large accounts load fast now. Customer confirmed. Added performance monitoring for accounts over 10k records."' }
+                            ]
+                        },
+                        {
+                            question: 'Manager: "We need to add dark mode. Customers have been asking for it."',
+                            responses: [
+                                { level: 'Level 1: Problem Identification', time: '2+ hrs', timeClass: 'scenario-time-red', cardClass: 'level-card-1', text: '"Okay, noted. Dark mode is needed."' },
+                                { level: 'Level 2: Cause Analysis', time: '1 hr', timeClass: 'scenario-time-orange', cardClass: 'level-card-2', text: '"We need dark mode. Our CSS uses hardcoded colors, so we\'d need to refactor the styling system."' },
+                                { level: 'Level 3: Solution Exploration', time: '45 min', timeClass: 'scenario-time-yellow', cardClass: 'level-card-3', text: '"For dark mode we could: use CSS variables, implement a theme toggle with localStorage, or use a library like styled-components with ThemeProvider."' },
+                                { level: 'Level 4: Solution Recommendation', time: '10 min', timeClass: 'scenario-time-green', cardClass: 'level-card-4', text: '"I researched dark mode approaches. CSS variables + localStorage is the lightest solution. I\'ve created a design showing the color palette. Estimated 2 days. <strong>Should I start?</strong>"' },
+                                { level: 'Level 5: Problem Resolution', time: '0 min', timeClass: 'scenario-time-green', cardClass: 'level-card-5', text: '"<strong>Dark mode is live.</strong> Implemented CSS variables, theme toggle remembers user preference, tested on all major pages. Usage analytics show 30% of users switched immediately."' }
+                            ]
+                        }
+                    ];
+
+                    let currentScenario = 0;
+                    let currentLevel = 2; // 0-indexed, so this is Level 3
+
+                    const slider = document.getElementById('levelSlider');
+                    const questionEl = document.getElementById('sliderQuestion');
+                    const levelEl = document.getElementById('sliderLevel');
+                    const timeEl = document.getElementById('sliderTime');
+                    const responseEl = document.getElementById('sliderResponse');
+                    const responseCard = document.getElementById('sliderResponseCard');
+                    const labels = document.querySelectorAll('.slider-label');
+                    const scenarioBtns = document.querySelectorAll('.slider-scenario-btn');
+
+                    function updateDisplay() {
+                        const response = scenarios[currentScenario].responses[currentLevel];
+
+                        // Update content
+                        levelEl.textContent = response.level;
+                        timeEl.textContent = response.time;
+                        responseEl.innerHTML = response.text;
+
+                        // Update time badge classes
+                        timeEl.className = 'slider-response-time ' + response.timeClass;
+
+                        // Update card background classes
+                        responseCard.className = 'slider-response-card ' + response.cardClass;
+
+                        // Update labels
+                        labels.forEach((label, idx) => {
+                            label.classList.toggle('active', idx === currentLevel);
+                        });
+                    }
+
+                    slider.addEventListener('input', (e) => {
+                        currentLevel = parseInt(e.target.value) - 1;
+                        updateDisplay();
+                    });
+
+                    scenarioBtns.forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            scenarioBtns.forEach(b => b.classList.remove('active'));
+                            btn.classList.add('active');
+                            currentScenario = parseInt(btn.dataset.scenario);
+                            questionEl.textContent = scenarios[currentScenario].question;
+                            updateDisplay();
+                        });
+                    });
+                })();
+            </script>
+        </div>
+    </section>
+
+    <!-- Connection to Dreyfus -->
+    <section id="dreyfus" class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">How This Relates to the Dreyfus Model</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 3rem;">Agency levels correlate with skill acquisition stages, but they're not the same thing</p>
+
+            <div class="feature-card" style="margin-bottom: 3rem;">
+                <h3>The Connection</h3>
+                <p>The <a href="{% landing_url 'dreyfus_model' %}" style="color: var(--primary); text-decoration: none; font-weight: 500;">Dreyfus model</a> describes how people acquire skills (Novice → Advanced Beginner → Competent → Proficient → Expert). The 5 Levels of Agency describe how people approach problems and take ownership.</p>
+                <p style="margin-top: 1rem;">You can be technically Expert but operate at Level 1 if you lack ownership mindset. Conversely, a Novice can operate at Level 4 by researching thoroughly and making recommendations within their knowledge constraints.</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Novice + Level 4</h3>
+                    <p><strong>What it looks like:</strong> "I'm new to React, but I researched this state management bug. Based on the docs and Stack Overflow, I think we should lift state to the parent component. Can you review my approach?"</p>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">Limited technical skill, but high agency in problem-solving approach.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Expert + Level 1</h3>
+                    <p><strong>What it looks like:</strong> "The microservices architecture has a latency problem." <em>(Then waits for someone else to investigate)</em></p>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">Deep technical expertise, but low ownership mindset. Surprisingly common in large companies.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Competent + Level 5</h3>
+                    <p><strong>What it looks like:</strong> "Database queries were slow. Added indexes on the foreign keys, reduced query time by 80%. Deployed to prod. Monitoring shows it's stable."</p>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">Solid technical skills combined with full ownership. This is what high-performing teams are built on.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Proficient + Level 5</h3>
+                    <p><strong>What it looks like:</strong> "Noticed a pattern of slow queries across multiple services. Implemented a caching layer, updated query patterns, added monitoring. Performance improved 10x. Documented the approach for other teams."</p>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">High technical skill + high agency + systems thinking. These people multiply team effectiveness.</p>
+                </div>
+            </div>
+
+            <div class="feature-card feature-card-warning" style="margin-top: 3rem;">
+                <h3>The Ideal Combination</h3>
+                <p>In performance reviews, you want to evaluate both dimensions:</p>
+                <ul style="margin-top: 1rem;">
+                    <li><strong>Technical skill (<a href="{% landing_url 'dreyfus_model' %}" style="color: var(--primary);">Dreyfus Model</a>):</strong> How good are they at their craft?</li>
+                    <li><strong>Agency level:</strong> How proactively do they solve problems?</li>
+                </ul>
+                <p style="margin-top: 1rem;">A Competent engineer with Level 5 agency is often more valuable than an Expert with Level 2 agency. Skills can be taught faster than ownership mindset.</p>
+                <p style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);"><a href="{% landing_url 'performance_matrix' %}" style="color: var(--primary); text-decoration: none; font-weight: 600;">→ See the complete 2×2 Performance Matrix: Four employee archetypes every manager should recognize</a></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- In Blik's Questionnaires -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">How Blik's Questionnaires Measure Agency</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 3rem;">Our default templates explicitly assess ownership and initiative</p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-bottom: 3rem;">
+                <div class="feature-card">
+                    <h3>Professional Skills Questionnaire</h3>
+                    <p style="margin-bottom: 1rem;">Includes dedicated sections on:</p>
+                    <ul style="font-size: 0.875rem;">
+                        <li><strong>Initiative & Ownership:</strong> Do they wait to be told, or do they proactively identify and solve problems?</li>
+                        <li><strong>Problem Solving:</strong> How do they approach challenges? Surface-level reporting or deep investigation?</li>
+                        <li><strong>Adaptability:</strong> Do they escalate every unexpected situation, or do they figure it out?</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Software Engineering Questionnaire</h3>
+                    <p style="margin-bottom: 1rem;">Evaluates agency through:</p>
+                    <ul style="font-size: 0.875rem;">
+                        <li><strong>Pragmatism & Execution:</strong> Do they ship solutions or wait for perfect conditions?</li>
+                        <li><strong>Strategic Vision:</strong> Do they see problems holistically and address root causes?</li>
+                        <li><strong>Growth Potential:</strong> How quickly do they move from identifying problems to solving them independently?</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Manager 360 Review</h3>
+                    <p style="margin-bottom: 1rem;">Measures agency through leadership lens:</p>
+                    <ul style="font-size: 0.875rem;">
+                        <li><strong>Direction:</strong> Do they empower teams to operate at Level 4+, or create dependencies?</li>
+                        <li><strong>Development:</strong> Are they teaching people to be passive or proactive?</li>
+                        <li><strong>Impact:</strong> Do they solve problems or just report them up the chain?</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="feature-card feature-card-success">
+                <h3>Measuring What Matters</h3>
+                <p style="margin-bottom: 1rem;">Traditional performance reviews miss agency entirely. They measure "what" someone does (features shipped, tickets closed) but not "how" they do it (Level 1 vs Level 5 approach).</p>
+                <p>Blik's questionnaires explicitly ask reviewers: Does this person identify problems and walk away, or do they drive solutions? The difference between a team of Level 1 and Level 5 employees is the difference between constant firefighting and smooth execution.</p>
+            </div>
+
+            <div class="cta-box" style="margin-top: 3rem;">
+                <h3>Ready to Evaluate Agency in Your Team?</h3>
+                <p>Blik includes questionnaires that measure both technical skills (Dreyfus) and problem-solving ownership (Agency Levels). Get 360-degree feedback that actually tells you how people work, not just what they produce.</p>
+                <a href="{% landing_url 'index' %}#pricing" class="btn btn-primary" style="display: inline-block;">View Pricing</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Teaching Agency -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">How to Teach Agency (The Framework in Practice)</h2>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>1. Set Clear Expectations</h3>
+                    <p>Tell new hires explicitly: "You operate at Level 4 minimum. When you spot a problem, I expect you to come with diagnosis and recommendations, not just alerts."</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>2. Reject Level 1 Behavior</h3>
+                    <p>When someone reports a problem without context, don't solve it for them. Ask: "What do you think is causing this? What solutions have you considered?" Make them level up.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>3. Reward Level 5 Actions</h3>
+                    <p>When someone solves a problem autonomously, praise it publicly. "This is exactly what high agency looks like." Make it clear this is the standard.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>4. Provide Safety Nets</h3>
+                    <p>People won't operate at Level 5 if they get punished for mistakes. Make it safe to act, fail, learn. The cost of occasional errors is lower than the cost of learned helplessness.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>5. Give Incremental Trust</h3>
+                    <p>Start new people at Level 4 (recommendations need approval). As they prove judgment, move them to Level 5 (act first, inform later). Earned autonomy works better than blanket permissions.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>6. Model It Yourself</h3>
+                    <p>If you as a manager operate at Level 1 with your own boss, your team will mirror that. Show them what Level 5 looks like by doing it yourself.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Research Foundation -->
+    <section id="research" class="section">
+        <div class="container">
+            <h2 class="section-title">Research Foundation & Sources</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 2rem;">Grounded in organizational psychology and self-determination theory</p>
+
+            <!-- Quick Research Summary -->
+            <div style="max-width: 800px; margin: 0 auto 3rem; background: var(--primary-600); color: white; padding: var(--space-12); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); border: 1px solid var(--primary-700);">
+                <h3 style="color: white; margin: 0 0 1.5rem 0; font-size: var(--text-2xl); font-weight: 700;">Framework Transparency</h3>
+                <p style="margin: 0 0 1rem 0; font-size: 0.95rem; line-height: 1.6; opacity: 0.95;">The "5 Levels of Agency" is a <strong>practical synthesis</strong> for workplace application, not a formally published academic model. It draws conceptually from 40+ years of peer-reviewed research on autonomy, proactive behavior, and self-determination.</p>
+                <p style="margin: 0 0 1rem 0; font-size: 0.9rem; line-height: 1.5; opacity: 0.9;">The underlying concepts are well-established. The specific "5 levels" structure is a pedagogical tool to help managers teach high-agency behavior.</p>
+                <p style="margin: 0; font-size: 0.875rem; line-height: 1.5; opacity: 0.85;"><strong>Related reading:</strong> <a href="https://www.goodreads.com/book/show/6452796-drive" target="_blank" rel="noopener" style="color: rgba(255,255,255,0.95); text-decoration: underline;">Drive: The Surprising Truth About What Motivates Us</a> by Daniel Pink explores autonomy as a core motivator, complementing the research cited below.</p>
+            </div>
+
+            <div class="feature-card feature-card-info" style="max-width: 900px; margin: 0 auto 2rem;">
+                <h3>Theoretical Foundations</h3>
+                <p style="margin-bottom: 1rem;">This framework synthesizes four major research streams from organizational psychology:</p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                    <div style="background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-sm);">
+                        <strong style="display: block; margin-bottom: 0.25rem;">Self-Determination Theory</strong>
+                        <span style="font-size: 0.875rem; color: var(--text-secondary);">Deci & Ryan (2017)</span>
+                    </div>
+                    <div style="background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-sm);">
+                        <strong style="display: block; margin-bottom: 0.25rem;">Personal Initiative</strong>
+                        <span style="font-size: 0.875rem; color: var(--text-secondary);">Frese & Fay (2001)</span>
+                    </div>
+                    <div style="background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-sm);">
+                        <strong style="display: block; margin-bottom: 0.25rem;">Proactive Behavior</strong>
+                        <span style="font-size: 0.875rem; color: var(--text-secondary);">Parker et al. (2010)</span>
+                    </div>
+                    <div style="background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-sm);">
+                        <strong style="display: block; margin-bottom: 0.25rem;">Psychological Empowerment</strong>
+                        <span style="font-size: 0.875rem; color: var(--text-secondary);">Spreitzer (1995)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="read-more-container">
+                <button class="read-more-toggle" onclick="toggleExpandable('research-papers')">
+                    Show Research Details
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="research-papers" class="expandable-section">
+                <h3 style="max-width: 900px; margin: 0 auto 2rem; text-align: center;">Key Research Papers</h3>
+
+                <div class="features-grid" style="margin-bottom: 3rem;">
+                    <div class="feature-card">
+                        <h4 style="margin-bottom: 0.5rem;">Self-Determination Theory</h4>
+                        <p style="font-size: 0.875rem; margin-bottom: 0.5rem;"><strong>Deci, E. L., Olafsen, A. H., & Ryan, R. M. (2017).</strong> Self-determination theory in work organizations: The state of a science. <em>Annual Review of Organizational Psychology, 4</em>, 19-43.</p>
+                        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Continuum from external control to autonomous motivation.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://doi.org/10.1146/annurev-orgpsych-032516-113108" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">DOI Link</a>
+                            <a href="https://scholar.google.com/scholar?q=deci+self+determination+theory+work+organizations+2017" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Google Scholar</a>
+                        </div>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4 style="margin-bottom: 0.5rem;">Personal Initiative</h4>
+                        <p style="font-size: 0.875rem; margin-bottom: 0.5rem;"><strong>Frese, M., & Fay, D. (2001).</strong> Personal initiative: An active performance concept for work in the 21st century. <em>Research in Organizational Behavior, 23</em>, 133-188.</p>
+                        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Self-starting, proactive, persistent behavior.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://doi.org/10.1016/S0191-3085(01)23005-6" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">DOI Link</a>
+                            <a href="https://scholar.google.com/scholar?q=frese+fay+personal+initiative+2001" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Google Scholar</a>
+                        </div>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4 style="margin-bottom: 0.5rem;">Proactive Behavior</h4>
+                        <p style="font-size: 0.875rem; margin-bottom: 0.5rem;"><strong>Parker, S. K., & Collins, C. G. (2010).</strong> Taking stock: Integrating and differentiating multiple proactive behaviors. <em>Journal of Management, 36</em>(3), 633-662.</p>
+                        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Self-initiating change to achieve a different future.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://doi.org/10.1177/0149206308321554" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">DOI Link</a>
+                            <a href="https://scholar.google.com/scholar?q=parker+collins+proactive+behavior+2010" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Google Scholar</a>
+                        </div>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4 style="margin-bottom: 0.5rem;">Psychological Empowerment</h4>
+                        <p style="font-size: 0.875rem; margin-bottom: 0.5rem;"><strong>Spreitzer, G. M. (1995).</strong> Psychological empowerment in the workplace: Dimensions, measurement, and validation. <em>Academy of Management Journal, 38</em>(5), 1442-1465.</p>
+                        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Four cognitions that enable self-perception of agency.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://doi.org/10.5465/256865" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">DOI Link</a>
+                            <a href="https://scholar.google.com/scholar?q=spreitzer+psychological+empowerment+workplace+1995" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Google Scholar</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="feature-card" style="max-width: 900px; margin: 0 auto;">
+                    <h3>Research Summary</h3>
+                    <p style="margin-bottom: 1rem;">The empirical evidence consistently demonstrates that:</p>
+                    <ul style="margin: 0 0 1rem 1.5rem; padding: 0;">
+                        <li style="margin-bottom: 0.5rem;">Autonomous motivation predicts better performance and well-being than controlled motivation</li>
+                        <li style="margin-bottom: 0.5rem;">Proactive employees generate more value and require less managerial oversight</li>
+                        <li style="margin-bottom: 0.5rem;">Supporting employee autonomy creates measurable ROI (3:1+ in intervention studies—Deci et al., 2017)</li>
+                        <li>High-agency behavior can be developed through autonomy-supportive management practices</li>
+                    </ul>
+                    <p>The 5 Levels framework synthesizes these research findings into practical guidance that managers and employees can apply immediately.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Further Reading & Sources -->
+    <section class="section section-alt" style="display: none;">
+        <div class="container">
+            <h2 class="section-title">Further Reading & Sources</h2>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
+                <div class="feature-card">
+                    <h3>Self-Determination Theory</h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                            <strong>Deci, E. L., Olafsen, A. H., & Ryan, R. M. (2017).</strong> Self-determination theory in work organizations: The state of a science. <em>Annual Review of Organizational Psychology and Organizational Behavior, 4</em>, 19-43.
+                            <div style="margin-top: 0.5rem;">
+                                <a href="https://doi.org/10.1146/annurev-orgpsych-032516-113108" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none; font-size: 0.875rem;">https://doi.org/10.1146/annurev-orgpsych-032516-113108</a>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Personal Initiative</h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                            <strong>Frese, M., & Fay, D. (2001).</strong> Personal initiative: An active performance concept for work in the 21st century. <em>Research in Organizational Behavior, 23</em>, 133-188.
+                            <div style="margin-top: 0.5rem;">
+                                <a href="https://doi.org/10.1016/S0191-3085(01)23005-6" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none; font-size: 0.875rem;">https://doi.org/10.1016/S0191-3085(01)23005-6</a>
+                            </div>
+                        </li>
+                        <li style="margin-bottom: 1rem;">
+                            <strong>Frese, M., Fay, D., Hilburger, T., Leng, K., & Tag, A. (1997).</strong> The concept of personal initiative: Operationalization, reliability and validity in two German samples. <em>Journal of Occupational and Organizational Psychology, 70</em>, 139-161.
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Proactive Behavior</h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                            <strong>Parker, S. K., & Collins, C. G. (2010).</strong> Taking stock: Integrating and differentiating multiple proactive behaviors. <em>Journal of Management, 36</em>(3), 633-662.
+                            <div style="margin-top: 0.5rem;">
+                                <a href="https://doi.org/10.1177/0149206308321554" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none; font-size: 0.875rem;">https://doi.org/10.1177/0149206308321554</a>
+                            </div>
+                        </li>
+                        <li style="margin-bottom: 1rem;">
+                            <strong>Parker, S. K., Bindl, U. K., & Strauss, K. (2010).</strong> Making things happen: A model of proactive motivation. <em>Journal of Management, 36</em>(4), 827-856.
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Psychological Empowerment</h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                            <strong>Spreitzer, G. M. (1995).</strong> Psychological empowerment in the workplace: Dimensions, measurement, and validation. <em>Academy of Management Journal, 38</em>(5), 1442-1465.
+                            <div style="margin-top: 0.5rem;">
+                                <a href="https://doi.org/10.5465/256865" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none; font-size: 0.875rem;">https://doi.org/10.5465/256865</a>
+                            </div>
+                        </li>
+                        <li style="margin-bottom: 1rem;">
+                            <strong>Spreitzer, G. M., Kizilos, M. A., & Nason, S. W. (1997).</strong> A dimensional analysis of the relationship between psychological empowerment and effectiveness satisfaction, and strain. <em>Journal of Management, 23</em>(5), 679-704.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="feature-card" style="margin-top: 3rem; max-width: 900px; margin-left: auto; margin-right: auto;">
+                <h3>Note on Framework Origins</h3>
+                <p style="margin-bottom: 1rem;">The "5 Levels of Agency" framework presented on this page is a practical synthesis created for workplace application, not a formally published academic model. It draws conceptually from the research cited above on autonomous motivation, personal initiative, proactive behavior, and psychological empowerment.</p>
+                <p>The underlying concepts are well-established in organizational psychology literature. The specific "5 levels" structure is a pedagogical tool designed to help managers and employees understand and develop high-agency behavior in practice.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Related Frameworks Section -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">Complete Your Performance Framework</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 3rem; max-width: 800px; margin-left: auto; margin-right: auto;">
+                Agency measures <strong>ownership mindset</strong>, but high-agency juniors can cause damage without technical skill. You need both dimensions.
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
+                <div class="feature-card">
+                    <h3 style="margin-bottom: 1rem;">Dreyfus Model</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        Learn the research-backed framework for evaluating technical skill from Novice to Expert. Used by Stripe, Thoughtbot, and hundreds of engineering teams.
+                    </p>
+                    <a href="{% landing_url 'dreyfus_model' %}" class="btn btn-secondary" style="display: inline-block;">Read Dreyfus Framework →</a>
+                </div>
+
+                <div class="feature-card">
+                    <h3 style="margin-bottom: 1rem;">Performance Matrix</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        See what happens when you combine Dreyfus skill levels with Agency levels. Identify Force Multipliers, coach Brilliant Passengers, and avoid promoting Risk Takers.
+                    </p>
+                    <a href="{% landing_url 'performance_matrix' %}" class="btn btn-secondary" style="display: inline-block;">See the Matrix →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="section cta-section">
+        <div class="container">
+            <div class="cta-content">
+                <h2>Build a Team of Level 4+ Employees</h2>
+                <p>Use 360-degree feedback to identify who operates with high agency and who needs coaching. Blik's questionnaires measure both technical skills and ownership mindset.</p>
+                <div class="cta-buttons">
+                    <a href="{% landing_url 'signup' %}" class="btn btn-primary">Start Free Trial</a>
+                    <a href="https://github.com/thijsdezoete/blik" class="btn btn-secondary" target="_blank" rel="noopener">Self-Host (Free)</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {% include "landing/includes/article_metadata.html" with template_path="landing/agency_levels.html" author="Thijs de Zoete" %}
+{% endblock %}

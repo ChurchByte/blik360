@@ -1,0 +1,72 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback Submitted</title>
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/feedback.css' %}">
+    <script>
+        // Theme detection and initialization
+        (function() {
+            const getPreferredTheme = () => {
+                const stored = localStorage.getItem('theme');
+                if (stored) return stored;
+                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            };
+
+            const setTheme = (theme) => {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+            };
+
+            setTheme(getPreferredTheme());
+
+            // Listen for system theme changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (!localStorage.getItem('theme')) {
+                    setTheme(e.matches ? 'dark' : 'light');
+                }
+            });
+        })();
+    </script>
+    <script>
+        // Clear draft and step position from local storage on completion
+        (async function() {
+            const feedbackToken = '{{ token.token }}';
+            if (!feedbackToken) return;
+
+            try {
+                // Hash the token using SHA-256
+                const encoder = new TextEncoder();
+                const data = encoder.encode(feedbackToken);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+                const storageKey = `feedback_draft_${hashHex}`;
+                localStorage.removeItem(storageKey);
+                console.log('Draft and step position cleared after completion');
+            } catch (e) {
+                console.error('Error clearing draft:', e);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="complete-container">
+            <div class="complete-icon">✓</div>
+            <h1 class="complete-title">Feedback Submitted</h1>
+            <p class="complete-message">
+                Thank you for completing the 360 degree feedback for {{ cycle.reviewee.name }}.
+                <br><br>
+                Your anonymous feedback has been recorded and will contribute to their performance review.
+                <br><br>
+                You may now close this window.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

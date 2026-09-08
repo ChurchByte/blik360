@@ -1,0 +1,734 @@
+{% extends 'landing/base.html' %}
+{% load static landing_tags %}
+
+{% block meta %}
+    <title>Developer Competency Framework: Dreyfus Model for Performance Reviews | Blik</title>
+    <meta name="description" content="Research-backed framework to evaluate software engineers from Novice to Expert. Used for career ladders, performance reviews, and hiring decisions at high-performing tech companies. 40+ years of cognitive science research.">
+    <meta name="keywords" content="software engineer competency framework, developer performance review, engineering career ladder, junior vs senior developer evaluation, technical skill assessment, Dreyfus model engineering, developer skill levels, engineering manager tools">
+    <meta name="author" content="Blik">
+    <link rel="canonical" href="{{ site_protocol }}://{{ site_domain }}{% landing_url 'dreyfus_model' %}">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ site_protocol }}://{{ site_domain }}{% landing_url 'dreyfus_model' %}">
+    <meta property="og:title" content="Developer Competency Framework: Dreyfus Model (Novice to Expert)">
+    <meta property="og:description" content="Research-backed framework used by Stripe, Thoughtbot, and hundreds of engineering teams to evaluate developer skills and build career ladders.">
+    <meta property="og:site_name" content="{{ site_name }}">
+    <meta property="og:image" content="{{ site_protocol }}://{{ site_domain }}{% landing_url 'og_image' %}?title=Dreyfus%20Model&subtitle=Novice%20to%20Expert%20Framework">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:alt" content="Dreyfus Model - Novice to Expert Framework">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{{ site_protocol }}://{{ site_domain }}{% landing_url 'dreyfus_model' %}">
+    <meta name="twitter:title" content="Developer Competency Framework: Dreyfus Model (Novice to Expert)">
+    <meta name="twitter:description" content="Research-backed framework used by Stripe, Thoughtbot, and hundreds of engineering teams to evaluate developer skills and build career ladders.">
+    <meta name="twitter:image" content="{{ site_protocol }}://{{ site_domain }}{% landing_url 'og_image' %}?title=Dreyfus%20Model&subtitle=Novice%20to%20Expert%20Framework">
+{% endblock %}
+
+{% block structured_data %}
+    {% article_schema "landing/dreyfus_model.html" headline="Dreyfus Model for Software Engineers: Novice to Expert Framework" description="Research-backed framework to evaluate software engineers from Novice to Expert. Used for career ladders, performance reviews, and hiring decisions." canonical_url=request.build_absolute_uri image_url=request.build_absolute_uri|add:"?title=Dreyfus%20Model&subtitle=Novice%20to%20Expert%20Framework" %}
+{% endblock %}
+
+{% block nav_links %}
+    <a href="{% landing_url 'index' %}">Home</a>
+    <a href="#model">The Model</a>
+    <a href="#framework">Competency Framework</a>
+    <a href="#enterprise">Enterprise</a>
+    <a href="#research">Research</a>
+    <a href="https://github.com/thijsdezoete/blik" target="_blank" rel="noopener">GitHub</a>
+{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">Competency Frameworks That Engineers Actually Respect</h1>
+                <p class="hero-subtitle">I built Blik's assessments on the Dreyfus Model—40 years of research on how people actually develop skills. No corporate jargon, no arbitrary matrices. Just Novice to Expert, the way cognitive scientists describe it.</p>
+
+                <!-- TL;DR Box -->
+                <div style="background: var(--bg-card); border: 2px solid var(--primary-200); padding: var(--space-8); margin: var(--space-8) 0; border-radius: var(--radius-lg); text-align: left; max-width: 720px; margin-left: auto; margin-right: auto; box-shadow: var(--shadow-sm);">
+                    <h2 style="margin: 0 0 var(--space-4) 0; font-size: var(--text-sm); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary-600);">TL;DR</h2>
+                    <p style="margin: 0 0 var(--space-4) 0; font-size: var(--text-base); line-height: 1.6; color: var(--text-primary);">The Dreyfus Model is a 40-year-old cognitive science framework describing how people progress from <strong>Novice → Advanced Beginner → Competent → Proficient → Expert</strong>. Unlike corporate competency matrices, it's backed by peer-reviewed research and maps naturally to technical career ladders.</p>
+                    <p style="margin: 0; font-size: var(--text-base); line-height: 1.6; color: var(--text-primary);"><strong style="color: var(--primary-600);">Key insight:</strong> Experts don't just know more—they think fundamentally differently, relying on pattern recognition over rigid rules.</p>
+                </div>
+
+                <div class="hero-cta">
+                    <a href="#model" class="btn btn-primary">Learn the Model</a>
+                    <a href="{% landing_url 'open_source' %}" class="btn btn-secondary">See the Code</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="model" class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">The Dreyfus Model of Skill Acquisition</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 1.5rem;">Five stages backed by cognitive science research, not HR buzzwords</p>
+
+            <!-- Quick Visual Summary -->
+            <div style="max-width: 900px; margin: 0 auto var(--space-16); background: var(--bg-card); padding: var(--space-12); border-radius: var(--radius-xl); box-shadow: var(--shadow-md); border: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--text-sm); font-weight: 600;">
+                    <span style="flex: 1; text-align: center; color: var(--text-primary); padding: var(--space-2);">Novice</span>
+                    <span style="flex: 0 0 auto; color: var(--primary-400);">→</span>
+                    <span style="flex: 1; text-align: center; color: var(--text-primary); padding: var(--space-2);">Advanced Beginner</span>
+                    <span style="flex: 0 0 auto; color: var(--primary-400);">→</span>
+                    <span style="flex: 1; text-align: center; color: var(--text-primary); padding: var(--space-2);">Competent</span>
+                    <span style="flex: 0 0 auto; color: var(--primary-400);">→</span>
+                    <span style="flex: 1; text-align: center; color: var(--text-primary); padding: var(--space-2);">Proficient</span>
+                    <span style="flex: 0 0 auto; color: var(--primary-400);">→</span>
+                    <span style="flex: 1; text-align: center; color: var(--text-primary); padding: var(--space-2);">Expert</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-4); font-size: var(--text-xs); color: var(--text-secondary); font-style: italic;">
+                    <span style="flex: 1; text-align: center; padding: var(--space-1);">Rigid rules</span>
+                    <span style="flex: 0 0 auto; opacity: 0;"></span>
+                    <span style="flex: 1; text-align: center; padding: var(--space-1);">Situational patterns</span>
+                    <span style="flex: 0 0 auto; opacity: 0;"></span>
+                    <span style="flex: 1; text-align: center; padding: var(--space-1);">Mental models</span>
+                    <span style="flex: 0 0 auto; opacity: 0;"></span>
+                    <span style="flex: 1; text-align: center; padding: var(--space-1);">Holistic perspective</span>
+                    <span style="flex: 0 0 auto; opacity: 0;"></span>
+                    <span style="flex: 1; text-align: center; padding: var(--space-1);">Intuitive mastery</span>
+                </div>
+            </div>
+
+            <div class="feature-card" style="margin-bottom: var(--space-16); border-left: 4px solid var(--success);">
+                <h3 style="margin-bottom: var(--space-4); font-size: var(--text-2xl);">Why Dreyfus for Developers?</h3>
+                <p style="margin-bottom: var(--space-6); font-size: var(--text-base); line-height: 1.6;">Developed by <a href="https://en.wikipedia.org/wiki/Dreyfus_model_of_skill_acquisition" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline;">Stuart and Hubert Dreyfus at UC Berkeley (1980s)</a> through Air Force-funded research on pilot training. Engineers recognize themselves in these stages because the model describes <strong>actual cognitive patterns</strong> in skill development, not arbitrary corporate levels.</p>
+                <p style="margin-bottom: var(--space-6); font-size: var(--text-base); line-height: 1.6;"><strong>The model maps naturally to career ladders:</strong> Junior → Mid-Level → Senior → Staff → Principal. It acknowledges that experts think <em>differently</em> than beginners, not just "better."</p>
+                <div style="background: var(--success-50); padding: var(--space-6); border-radius: var(--radius-md); margin-top: var(--space-6); border: 1px solid var(--success-200);">
+                    <p style="margin: 0; font-size: var(--text-sm); line-height: 1.6; color: var(--success-900);"><strong>Core Insight:</strong> Beginners rely on explicit rules ("always use dependency injection"). Experts rely on intuition and pattern recognition. This isn't just "knowing more"—it's a fundamental shift in how the brain processes expertise. <a href="#research" style="color: var(--success-600); text-decoration: underline;">See research →</a></p>
+                </div>
+                <p style="margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border); font-size: var(--text-base);"><strong>But technical skill is only half the picture.</strong> An Expert developer who waits to be told what to do creates more management overhead than a Competent developer with high agency. See how Dreyfus combines with ownership mindset in the <a href="{% landing_url 'performance_matrix' %}" style="color: var(--primary); text-decoration: underline; font-weight: 600;">Performance Matrix →</a></p>
+            </div>
+
+            <div style="max-width: 1100px; margin: 0 auto var(--space-20); text-align: center;">
+                <div style="border-radius: var(--radius-xl); overflow: hidden; padding: var(--space-16); background: var(--bg-card); box-shadow: var(--shadow-lg); border: 1px solid var(--border);">
+                    {% include 'components/dreyfus_model_svg.html' %}
+                </div>
+                <p style="color: var(--text-secondary); margin-top: var(--space-6); font-size: var(--text-sm); max-width: 600px; margin-left: auto; margin-right: auto;">
+                    Visual representation of the five Dreyfus stages, showing the progression from rigid rule following to intuitive expertise
+                </p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card" style="border-top: 3px solid var(--primary-300);">
+                    <h3 style="margin-bottom: var(--space-4); color: var(--primary-600);">1. Novice</h3>
+                    <p style="font-size: var(--text-base); margin-bottom: var(--space-2); line-height: 1.6;"><strong>Thinking style:</strong> Follows rules rigidly. Needs step-by-step instructions.</p>
+                    <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0;"><strong>Career level:</strong> Intern, Junior Developer</p>
+
+                    <div id="novice-details" class="card-expandable-content">
+                        <p style="font-size: var(--text-sm); color: var(--text-tertiary); margin-bottom: var(--space-4); font-style: italic; padding-left: var(--space-4); border-left: 2px solid var(--border);">"Like a computer following a program" — Dreyfus, 1986</p>
+                        <div style="background: var(--primary-50); padding: var(--space-4); border-radius: var(--radius-md);">
+                            <p style="font-size: var(--text-sm); margin: 0; line-height: 1.6;"><strong>In practice:</strong> Writes code from detailed tickets. Struggles with ambiguous requirements. Needs explicit technical specs.</p>
+                        </div>
+                    </div>
+                    <button class="card-expand-toggle" onclick="toggleCardContent('novice-details')">Read more<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                </div>
+
+                <div class="feature-card" style="border-top: 3px solid var(--primary-400);">
+                    <h3 style="margin-bottom: var(--space-4); color: var(--primary-600);">2. Advanced Beginner</h3>
+                    <p style="font-size: var(--text-base); margin-bottom: var(--space-2); line-height: 1.6;"><strong>Thinking style:</strong> Recognizes recurring patterns from experience. Applies situational judgment.</p>
+                    <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0;"><strong>Career level:</strong> Junior to Mid-Level Developer</p>
+
+                    <div id="advanced-beginner-details" class="card-expandable-content">
+                        <p style="font-size: var(--text-sm); color: var(--text-tertiary); margin-bottom: var(--space-4); font-style: italic; padding-left: var(--space-4); border-left: 2px solid var(--border);">"Learns to recognize meaningful situational aspects"</p>
+                        <div style="background: var(--primary-50); padding: var(--space-4); border-radius: var(--radius-md);">
+                            <p style="font-size: var(--text-sm); margin: 0; line-height: 1.6;"><strong>In practice:</strong> Debugs familiar problems. Applies known solutions to similar situations. Struggles with novel challenges.</p>
+                        </div>
+                    </div>
+                    <button class="card-expand-toggle" onclick="toggleCardContent('advanced-beginner-details')">Read more<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                </div>
+
+                <div class="feature-card" style="border-top: 3px solid var(--primary-500);">
+                    <h3 style="margin-bottom: var(--space-4); color: var(--primary-600);">3. Competent</h3>
+                    <p style="font-size: var(--text-base); margin-bottom: var(--space-2); line-height: 1.6;"><strong>Thinking style:</strong> Develops mental models. Prioritizes relevant features. Takes emotional responsibility.</p>
+                    <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0;"><strong>Career level:</strong> Mid-Level to Senior Developer</p>
+
+                    <div id="competent-details" class="card-expandable-content">
+                        <p style="font-size: var(--text-sm); color: var(--text-tertiary); margin-bottom: var(--space-4); font-style: italic; padding-left: var(--space-4); border-left: 2px solid var(--border);">"Chooses a plan that organizes the situation"</p>
+                        <div style="background: var(--primary-50); padding: var(--space-4); border-radius: var(--radius-md);">
+                            <p style="font-size: var(--text-sm); margin: 0; line-height: 1.6;"><strong>In practice:</strong> Designs features independently. Makes architectural decisions for bounded contexts. Weighs trade-offs.</p>
+                        </div>
+                    </div>
+                    <button class="card-expand-toggle" onclick="toggleCardContent('competent-details')">Read more<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                </div>
+
+                <div class="feature-card" style="border-top: 3px solid var(--primary-600);">
+                    <h3 style="margin-bottom: var(--space-4); color: var(--primary-700);">4. Proficient</h3>
+                    <p style="font-size: var(--text-base); margin-bottom: var(--space-2); line-height: 1.6;"><strong>Thinking style:</strong> Sees situations holistically via pattern recognition. Intuition guides what to do.</p>
+                    <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0;"><strong>Career level:</strong> Senior to Staff Engineer</p>
+
+                    <div id="proficient-details" class="card-expandable-content">
+                        <p style="font-size: var(--text-sm); color: var(--text-tertiary); margin-bottom: var(--space-4); font-style: italic; padding-left: var(--space-4); border-left: 2px solid var(--border);">"Immediately struck by the appropriate action"</p>
+                        <div style="background: var(--primary-50); padding: var(--space-4); border-radius: var(--radius-md);">
+                            <p style="font-size: var(--text-sm); margin: 0; line-height: 1.6;"><strong>In practice:</strong> Anticipates problems before they manifest. Mentors effectively. Sees system-level implications of local changes.</p>
+                        </div>
+                    </div>
+                    <button class="card-expand-toggle" onclick="toggleCardContent('proficient-details')">Read more<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                </div>
+
+                <div class="feature-card" style="border-top: 3px solid var(--primary-700);">
+                    <h3 style="margin-bottom: var(--space-4); color: var(--primary-800);">5. Expert</h3>
+                    <p style="font-size: var(--text-base); margin-bottom: var(--space-2); line-height: 1.6;"><strong>Thinking style:</strong> Both perception and response become intuitive. Acts "by feel" without calculating.</p>
+                    <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0;"><strong>Career level:</strong> Staff, Principal, Distinguished Engineer</p>
+
+                    <div id="expert-details" class="card-expandable-content">
+                        <p style="font-size: var(--text-sm); color: var(--text-tertiary); margin-bottom: var(--space-4); font-style: italic; padding-left: var(--space-4); border-left: 2px solid var(--border);">"Sees intuitively what to do without applying rules"</p>
+                        <div style="background: var(--primary-50); padding: var(--space-4); border-radius: var(--radius-md);">
+                            <p style="font-size: var(--text-sm); margin: 0; line-height: 1.6;"><strong>In practice:</strong> Designs novel architectures. Identifies elegant solutions to complex problems. Influences industry practices.</p>
+                        </div>
+                    </div>
+                    <button class="card-expand-toggle" onclick="toggleCardContent('expert-details')">Read more<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                </div>
+            </div>
+
+            <div class="feature-card" style="margin-top: var(--space-16); border-left: 4px solid var(--warning);">
+                <h3 style="margin-bottom: var(--space-4); font-size: var(--text-2xl);">Critical Insight: Domain-Specific Expertise</h3>
+                <p style="font-size: var(--text-base); line-height: 1.6; margin: 0;">An engineer can be an Expert in one domain (e.g., distributed systems) while being Competent or Advanced Beginner in another (e.g., frontend frameworks). The Dreyfus model applies per skill area, not to "the whole person."</p>
+            </div>
+
+            <div class="feature-card" style="margin-top: var(--space-12); background: var(--primary-50); border: 2px solid var(--primary-200);">
+                <h3 style="margin-bottom: var(--space-4); font-size: var(--text-2xl); color: var(--primary-700);">Technical Skill Is Only Half the Picture</h3>
+                <p style="margin-bottom: var(--space-6); font-size: var(--text-base); line-height: 1.6;">The Dreyfus Model measures <strong>what people know</strong>. But performance also depends on <strong>how they work</strong>—their ownership mindset and agency level.</p>
+                <a href="{% landing_url 'performance_matrix' %}" style="display: inline-block; padding: var(--space-3) var(--space-6); background: var(--primary-600); color: white; text-decoration: none; font-weight: 600; border-radius: var(--radius-md); font-size: var(--text-base);">See the Performance Matrix →</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="framework" class="section">
+        <div class="container">
+            <h2 class="section-title">Blik's Software Engineering Competency Framework</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 3rem;">10 dimensions adapted from research and industry best practices</p>
+
+            <div class="feature-card" style="margin-bottom: 3rem;">
+                <h3>Framework Inspiration</h3>
+                <p style="margin-bottom: 1rem;">Our default questionnaire synthesizes insights from:</p>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border);">Dreyfus Model of skill acquisition (see above)</li>
+                    <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border);">Open-source 360-degree engineering self-review frameworks</li>
+                    <li style="padding: 0.5rem 0;">Industry-standard competency models from high-performing engineering teams</li>
+                </ul>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>1. Technical Proficiency</h3>
+                    <p><strong>What it measures:</strong> Code quality, problem-solving ability, and technical depth.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">Novice creates code from well-defined requests. Expert conquers complex problems with elegant solutions.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>2. Personality & Collaboration</h3>
+                    <p><strong>What it measures:</strong> Teamwork, interpersonal skills, cultural fit.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">Would colleagues actively choose to work with this person?</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>3. Technical Breadth</h3>
+                    <p><strong>What it measures:</strong> Technology awareness, cross-platform capability, learning agility.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">From narrow specialization to broad experience across stacks and paradigms.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>4. Intrinsic Motivation</h3>
+                    <p><strong>What it measures:</strong> Genuine passion for programming beyond work requirements.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">Does this person code for the love of it, or just for paychecks?</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>5. Engineering Maturity</h3>
+                    <p><strong>What it measures:</strong> Application of best practices: testing, design patterns, agile methodologies.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">From ad-hoc coding to systematic engineering discipline.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>6. Pragmatism</h3>
+                    <p><strong>What it measures:</strong> Balancing technical ideals with business realities and constraints.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">Shipping practical solutions vs. pursuing theoretical perfection.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>7. Team Cooperation</h3>
+                    <p><strong>What it measures:</strong> Mentoring, code review quality, supporting team objectives.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">Individual contributor vs. force multiplier for the team.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>8. Communication</h3>
+                    <p><strong>What it measures:</strong> Explaining technical concepts, justifying design decisions, documentation.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">Can they make complex ideas understandable to varied audiences?</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>9. Growth Potential</h3>
+                    <p><strong>What it measures:</strong> Learning capacity, adaptability, receptiveness to feedback.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">Trajectory matters as much as current state.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>10. Strategic Vision</h3>
+                    <p><strong>What it measures:</strong> Product thinking, architectural foresight, anticipating future challenges.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary);">Tactical execution vs. strategic thinking about system evolution.</p>
+                </div>
+            </div>
+
+            <div class="feature-card feature-card-success" style="margin-top: 3rem;">
+                <h3>Customizable for Your Context</h3>
+                <p style="margin-bottom: 1rem;">This is the default framework. Blik is open source—modify dimensions, adjust weighting, add domain-specific competencies. The framework serves your needs, not the other way around.</p>
+                <p>Examples: Add "Security Awareness" for fintech teams. Include "Research Ability" for ML teams. Remove dimensions that don't apply to your context.</p>
+            </div>
+
+            <!-- Showcase Framework in Action -->
+            <div style="margin-top: 4rem;">
+                <h3 style="text-align: center; margin-bottom: 2rem; font-size: 1.5rem;">See the Framework in Action</h3>
+                <div style="max-width: 1000px; margin: 0 auto;">
+                    <div class="screenshot-hover-wrapper" style="border-radius: var(--radius-md); overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <picture class="screenshot-layer screenshot-light">
+                            <source srcset="{% static 'img/screenshots/report_charts_desktop_light.webp' %}" type="image/webp">
+                            <img src="{% static 'img/screenshots/report_charts_desktop_light.png' %}"
+                                 alt="360 Feedback Report with Dreyfus Framework - Light Theme"
+                                 loading="lazy"
+                                 style="width: 100%; height: auto; display: block;">
+                        </picture>
+                        <picture class="screenshot-layer screenshot-dark">
+                            <source srcset="{% static 'img/screenshots/report_charts_desktop_dark.webp' %}" type="image/webp">
+                            <img src="{% static 'img/screenshots/report_charts_desktop_dark.png' %}"
+                                 alt="360 Feedback Report with Dreyfus Framework - Dark Theme"
+                                 loading="lazy"
+                                 style="width: 100%; height: auto; display: block;">
+                        </picture>
+                        <div class="theme-indicator">Hover to toggle theme</div>
+                    </div>
+                    <p style="text-align: center; color: var(--text-secondary); margin-top: 1.5rem;">
+                        Radar charts visualize competency ratings across all 10 dimensions, with breakdowns by reviewer category
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <link rel="stylesheet" href="{% static 'css/landing-carousel.css' %}">
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">Why This Approach Works for Engineering Teams</h2>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Research-Based</h3>
+                    <p>Dreyfus model has 40+ years of cognitive science research. Not invented by consultants, but by academics studying actual skill acquisition.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Engineers Recognize Themselves</h3>
+                    <p>The stages map to lived experience. Developers understand where they are and what growth looks like without translation from HR jargon.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Domain-Specific Application</h3>
+                    <p>Acknowledges that someone can be Expert in databases but Novice in machine learning. Avoids oversimplified "levels."</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Culture and Skills</h3>
+                    <p>Combines technical evaluation (Dreyfus) with cultural fit (Sunday Test). Both matter for high-performing teams.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Actionable Feedback</h3>
+                    <p>Clear progression from one stage to the next. Reviewees understand what capabilities to develop for advancement.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Open and Adaptable</h3>
+                    <p>Framework is a starting point, not dogma. Fork it, customize it, improve it. Share improvements with the community.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">Example: Evaluating "Code Quality"</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 3rem;">How Dreyfus stages apply to a specific competency</p>
+
+            <div class="feature-card" style="max-width: 900px; margin: 0 auto;">
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Stage</th>
+                                <th>Code Quality Characteristics</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td data-label="Stage"><strong>Novice</strong></td>
+                                <td data-label="Characteristics">Code works for the happy path. Inconsistent formatting. Hard-coded values. Minimal error handling.</td>
+                            </tr>
+                            <tr>
+                                <td data-label="Stage"><strong>Advanced Beginner</strong></td>
+                                <td data-label="Characteristics">Follows style guide. Extracts some magic numbers to constants. Adds basic error handling. Code is readable.</td>
+                            </tr>
+                            <tr>
+                                <td data-label="Stage"><strong>Competent</strong></td>
+                                <td data-label="Characteristics">Well-structured modules. Appropriate abstractions. Comprehensive error handling. Tests cover main scenarios. Considers edge cases.</td>
+                            </tr>
+                            <tr>
+                                <td data-label="Stage"><strong>Proficient</strong></td>
+                                <td data-label="Characteristics">Clear separation of concerns. Anticipates future changes. Excellent test coverage. Code is self-documenting. Patterns applied appropriately, not dogmatically.</td>
+                            </tr>
+                            <tr>
+                                <td data-label="Stage"><strong>Expert</strong></td>
+                                <td data-label="Characteristics">Elegant solutions to complex problems. Code that other experts reference. Creates reusable components. Deep understanding of performance and maintainability trade-offs.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="research" class="section">
+        <div class="container">
+            <h2 class="section-title">Research Foundation & Sources</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 2rem;">Over 40 years of peer-reviewed cognitive science research</p>
+
+            <!-- Quick Research Summary -->
+            <div style="max-width: 800px; margin: 0 auto 3rem; background: var(--primary-600); color: white; padding: 3rem; border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); border: 1px solid var(--primary-700);">
+                <h3 style="color: white; margin: 0 0 1.5rem 0; font-size: var(--text-2xl); font-weight: 700;">Academic Credibility</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem;">40+</div>
+                        <div style="font-size: 0.875rem; opacity: 0.95;">Years of research</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem;">1980</div>
+                        <div style="font-size: 0.875rem; opacity: 0.95;">Original publication</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem;">10+</div>
+                        <div style="font-size: 0.875rem; opacity: 0.95;">Professional domains</div>
+                    </div>
+                </div>
+                <p style="margin: 0; font-size: 0.9rem; opacity: 0.95;">Commissioned by U.S. Air Force. Validated across nursing, medicine, software engineering, aviation, and education.</p>
+            </div>
+
+            <div class="read-more-container">
+                <button class="read-more-toggle" onclick="toggleExpandable('dreyfus-research-papers')">
+                    Show Research Details
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="dreyfus-research-papers" class="expandable-section">
+                <div class="feature-card feature-card-success" style="max-width: 900px; margin: 0 auto 2rem;">
+                    <h3>Primary Research (Original Dreyfus Work)</h3>
+                    <p style="margin-bottom: 1.5rem;">Studied skill acquisition in pilots, chess players, and other expert performers. Focus: How humans progress from rule-based thinking to intuitive expertise.</p>
+
+                    <div style="background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
+                        <p style="margin-bottom: 0.5rem;"><strong>Dreyfus, S. E., & Dreyfus, H. L. (1980).</strong> A Five-Stage Model of the Mental Activities Involved in Directed Skill Acquisition. University of California, Berkeley, Operations Research Center.</p>
+                        <p style="font-size: 0.875rem; margin-bottom: 0.75rem; color: var(--text-secondary);">The foundational 18-page report. Freely available.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://apps.dtic.mil/sti/tr/pdf/ADA084551.pdf" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Read PDF (DTIC)</a>
+                            <a href="https://scholar.google.com/scholar?q=dreyfus+five+stage+model+skill+acquisition+1980" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Google Scholar</a>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
+                        <p style="margin-bottom: 0.5rem;"><strong>Dreyfus, H. L., & Dreyfus, S. E. (1986).</strong> Mind Over Machine: The Power of Human Intuition and Expertise in the Era of the Computer. Free Press.</p>
+                        <p style="font-size: 0.875rem; margin-bottom: 0.75rem; color: var(--text-secondary);">The definitive book elaborating the model. Most-cited reference.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://www.goodreads.com/book/show/326806.Mind_Over_Machine" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Goodreads</a>
+                            <a href="https://scholar.google.com/scholar?q=dreyfus+mind+over+machine+1986" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Google Scholar</a>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-sm);">
+                        <p style="margin-bottom: 0.5rem;"><strong>Dreyfus, S. E. (2004).</strong> The Five-Stage Model of Adult Skill Acquisition. <em>Bulletin of Science, Technology & Society</em>, 24(3), 177-181.</p>
+                        <p style="font-size: 0.875rem; margin-bottom: 0.75rem; color: var(--text-secondary);">Concise academic summary of the model.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://doi.org/10.1177/0270467604264992" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">DOI Link</a>
+                            <a href="https://scholar.google.com/scholar?q=dreyfus+2004+five+stage+model+adult+skill" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Google Scholar</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="features-grid" style="margin-bottom: 3rem;">
+                    <div class="feature-card">
+                        <h3>Core Insight</h3>
+                        <p>The Dreyfus brothers discovered that experts don't just know more—they think fundamentally differently. Experts rely on <strong>intuition and pattern recognition</strong> developed through extensive experience, while novices depend on <strong>explicit rules and procedures</strong>.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>Four Mental Functions</h3>
+                        <p>The model tracks progression through four dimensions: <strong>recollection</strong> (what you remember), <strong>recognition</strong> (what patterns you see), <strong>decision</strong> (how you choose), and <strong>awareness</strong> (how you perceive situations).</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>Cross-Domain Validation</h3>
+                        <p>The model has been successfully applied in aviation, chess, nursing, medicine, and software engineering—proving it describes universal patterns of how humans acquire expertise, not domain-specific quirks.</p>
+                    </div>
+                </div>
+
+                <div style="max-width: 900px; margin: 0 auto 3rem;">
+                    <h3 style="margin-bottom: 1.5rem;">Applications in Professional Domains</h3>
+
+                    <div class="feature-card" style="margin-bottom: 1rem;">
+                        <h4 style="margin-bottom: 0.5rem;">Software Engineering</h4>
+                        <p style="margin-bottom: 0.5rem;"><strong>Hunt, A. (2008).</strong> Pragmatic Thinking and Learning: Refactor Your Wetware. Pragmatic Bookshelf.</p>
+                        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Andy Hunt (Pragmatic Programmer co-author, Agile Manifesto signatory) applied Dreyfus to software development teams.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://pragprog.com/titles/ahptl/pragmatic-thinking-and-learning/" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Publisher Site</a>
+                            <a href="https://www.goodreads.com/book/show/3063393-pragmatic-thinking-and-learning" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Goodreads</a>
+                        </div>
+                    </div>
+
+                    <div class="feature-card" style="margin-bottom: 1rem;">
+                        <h4 style="margin-bottom: 0.5rem;">Nursing & Healthcare</h4>
+                        <p style="margin-bottom: 0.5rem;"><strong>Benner, P. (1984).</strong> From Novice to Expert: Excellence and Power in Clinical Nursing Practice. Addison-Wesley.</p>
+                        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Most influential application - became foundational to nursing education worldwide.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://scholar.google.com/scholar?q=benner+novice+to+expert+1984" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Google Scholar</a>
+                            <a href="https://www.goodreads.com/book/show/679371.From_Novice_to_Expert" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Goodreads</a>
+                        </div>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4 style="margin-bottom: 0.5rem;">Comprehensive Multi-Domain Analysis</h4>
+                        <p style="margin-bottom: 0.5rem;"><strong>Mangiante, E. S., & Peno, K. (Eds.). (2021).</strong> Teaching and Learning for Adult Skill Acquisition: Applying the Dreyfus and Dreyfus Model in Different Fields. Information Age Publishing.</p>
+                        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Applications across healthcare, education, law enforcement, business, military, and ethics training.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <a href="https://scholar.google.com/scholar?q=mangiante+peno+2021+dreyfus+model" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline; font-size: 0.875rem;">Google Scholar</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-card feature-card-warning" style="max-width: 900px; margin: 0 auto;">
+                <h3>Why This Research Matters for Engineering Teams</h3>
+                <p style="margin-bottom: 1rem;">Understanding the Dreyfus stages prevents common management mistakes:</p>
+                <ul style="list-style: disc; padding-left: 1.5rem; margin-bottom: 1rem;">
+                    <li style="margin-bottom: 0.5rem;"><strong>Don't expect novices to make expert decisions:</strong> Junior engineers need explicit rules and step-by-step instructions. Asking them to make architectural decisions sets them up for failure.</li>
+                    <li style="margin-bottom: 0.5rem;"><strong>Don't constrain experts with rigid checklists:</strong> Senior engineers rely on pattern recognition and intuition. Forcing them to follow novice-level procedures wastes their expertise.</li>
+                    <li style="margin-bottom: 0.5rem;"><strong>Recognize domain-specific expertise:</strong> An engineer can be Expert in distributed systems while being Novice in machine learning. This isn't inconsistency—it's how skill acquisition actually works.</li>
+                </ul>
+                <p>The Dreyfus model gives you a research-backed vocabulary for discussing skill development that engineers actually understand and recognize in themselves.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">Further Reading</h2>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
+                <div class="feature-card">
+                    <h3>Research Papers</h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li style="margin-bottom: 0.75rem;">
+                            <a href="https://en.wikipedia.org/wiki/Dreyfus_model_of_skill_acquisition" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none;">Dreyfus Model of Skill Acquisition - Wikipedia</a>
+                        </li>
+                        <li style="margin-bottom: 0.75rem;">
+                            <a href="https://www.bumc.bu.edu/facdev-medicine/files/2012/03/Dreyfus-skill-level.pdf" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none;">Original Dreyfus & Dreyfus paper (PDF)</a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Engineering Culture</h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li style="margin-bottom: 0.75rem;">
+                            <a href="https://review.firstround.com/how-stripe-built-one-of-silicon-valleys-best-engineering-teams/" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none;">How Stripe Built One of Silicon Valley's Best Engineering Teams</a>
+                        </li>
+                        <li style="margin-bottom: 0.75rem;">
+                            <span style="color: var(--text-secondary);">Includes the Sunday Test explanation</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <h3>Open Source Frameworks</h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li style="margin-bottom: 0.75rem;">
+                            <a href="https://gist.github.com/bwnodak/64b1ec7f2323091ed837" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none;">360-Degree Software Engineering Self-Review</a>
+                        </li>
+                        <li style="margin-bottom: 0.75rem;">
+                            <span style="color: var(--text-secondary);">10-dimension competency framework (inspiration for Blik defaults)</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Enterprise Application: Work Type Quadrants -->
+    <section id="enterprise" class="section">
+        <div class="container">
+            <h2 class="section-title">Enterprise Application: Matching Skills to Work Types</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 2rem; max-width: 900px; margin-left: auto; margin-right: auto;">
+                Not all work requires the same skill level. Portfolio management frameworks help enterprises deploy the right people to the right work.
+            </p>
+
+            <!-- TL;DR Box -->
+            <div style="background: var(--bg-card); border: 2px solid var(--primary-200); padding: var(--space-8); margin: 0 auto var(--space-12); border-radius: var(--radius-lg); text-align: left; max-width: 900px; box-shadow: var(--shadow-sm);">
+                <h3 style="margin: 0 0 var(--space-4) 0; font-size: var(--text-sm); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary-600);">Key Insight for Leaders</h3>
+                <p style="margin: 0; font-size: var(--text-base); line-height: 1.6; color: var(--text-primary);">You don't need Force Multipliers everywhere. Different work types need different skill/agency combinations. Deploy your best people on innovation work. Maintenance work can absorb employees who'd be wasted on high-stakes projects.</p>
+            </div>
+
+            <!-- Work Type Quadrants Visual -->
+            <div style="max-width: 1000px; margin: 0 auto var(--space-12);">
+                <div style="background: var(--bg-card); padding: var(--space-8); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); border: 1px solid var(--border);">
+                    <!-- Quadrant Grid -->
+                    <div style="display: grid; grid-template-columns: auto 1fr 1fr; grid-template-rows: auto 1fr 1fr; gap: 0; min-height: 400px;">
+                        <!-- Empty top-left corner -->
+                        <div style="padding: var(--space-4);"></div>
+                        <!-- Column Headers -->
+                        <div style="padding: var(--space-4); text-align: center; font-weight: 700; color: var(--text-secondary); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid var(--border);">Non-Differentiating</div>
+                        <div style="padding: var(--space-4); text-align: center; font-weight: 700; color: var(--text-secondary); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid var(--border);">Differentiating</div>
+
+                        <!-- Row Header: Target -->
+                        <div style="padding: var(--space-4); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--text-secondary); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.05em; writing-mode: vertical-rl; transform: rotate(180deg); border-right: 2px solid var(--border);">Target State</div>
+
+                        <!-- Q3: Build to Change -->
+                        <div style="background: var(--primary-50); padding: var(--space-6); border: 1px solid var(--primary-200); margin: var(--space-2);">
+                            <h4 style="margin: 0 0 var(--space-2) 0; color: var(--primary-700); font-size: var(--text-base);">Build to Change</h4>
+                            <p style="margin: 0 0 var(--space-3) 0; font-size: var(--text-sm); color: var(--text-secondary);">Factory mode, major releases</p>
+                            <div style="background: var(--bg-card); padding: var(--space-3); border-radius: var(--radius-md); font-size: var(--text-sm);">
+                                <strong style="color: var(--primary-600);">Deploy:</strong> Competent performers<br>
+                                <span style="color: var(--text-secondary);">Dreyfus: Competent-Proficient</span><br>
+                                <span style="color: var(--text-secondary);">Agency: Level 3-4</span>
+                            </div>
+                        </div>
+
+                        <!-- Q2: Innovation @ Scale -->
+                        <div style="background: var(--success-50); padding: var(--space-6); border: 1px solid var(--success-200); margin: var(--space-2);">
+                            <h4 style="margin: 0 0 var(--space-2) 0; color: var(--success-700); font-size: var(--text-base);">Innovation @ Scale</h4>
+                            <p style="margin: 0 0 var(--space-3) 0; font-size: var(--text-sm); color: var(--text-secondary);">MVPs, managed delivery</p>
+                            <div style="background: var(--bg-card); padding: var(--space-3); border-radius: var(--radius-md); font-size: var(--text-sm);">
+                                <strong style="color: var(--success-600);">Deploy:</strong> Force Multipliers + Hungry Learners<br>
+                                <span style="color: var(--text-secondary);">Dreyfus: Competent-Expert mix</span><br>
+                                <span style="color: var(--text-secondary);">Agency: Level 4-5</span>
+                            </div>
+                        </div>
+
+                        <!-- Row Header: Non-Target -->
+                        <div style="padding: var(--space-4); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--text-secondary); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.05em; writing-mode: vertical-rl; transform: rotate(180deg); border-right: 2px solid var(--border);">Non-Target</div>
+
+                        <!-- Q4: Run to Retire -->
+                        <div style="background: var(--bg-secondary); padding: var(--space-6); border: 1px solid var(--border); margin: var(--space-2);">
+                            <h4 style="margin: 0 0 var(--space-2) 0; color: var(--text-secondary); font-size: var(--text-base);">Run to Retire</h4>
+                            <p style="margin: 0 0 var(--space-3) 0; font-size: var(--text-sm); color: var(--text-secondary);">Maintenance, minor releases</p>
+                            <div style="background: var(--bg-card); padding: var(--space-3); border-radius: var(--radius-md); font-size: var(--text-sm);">
+                                <strong style="color: var(--text-secondary);">Deploy:</strong> Lower skill acceptable<br>
+                                <span style="color: var(--text-secondary);">Dreyfus: Adv. Beginner-Competent</span><br>
+                                <span style="color: var(--text-secondary);">Agency: Level 2-3</span>
+                            </div>
+                        </div>
+
+                        <!-- Q1: Disrupt to Succeed -->
+                        <div style="background: var(--warning-50); padding: var(--space-6); border: 1px solid var(--warning-200); margin: var(--space-2);">
+                            <h4 style="margin: 0 0 var(--space-2) 0; color: var(--warning-700); font-size: var(--text-base);">Disrupt to Succeed</h4>
+                            <p style="margin: 0 0 var(--space-3) 0; font-size: var(--text-sm); color: var(--text-secondary);">Innovation lab, ideation</p>
+                            <div style="background: var(--bg-card); padding: var(--space-3); border-radius: var(--radius-md); font-size: var(--text-sm);">
+                                <strong style="color: var(--warning-600);">Deploy:</strong> Force Multipliers only<br>
+                                <span style="color: var(--text-secondary);">Dreyfus: Proficient-Expert</span><br>
+                                <span style="color: var(--text-secondary);">Agency: Level 5</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Axis Labels -->
+                    <div style="display: flex; justify-content: space-between; margin-top: var(--space-4); padding: 0 var(--space-4);">
+                        <span style="font-size: var(--text-xs); color: var(--text-tertiary);">Traditional IT Spend</span>
+                        <span style="font-size: var(--text-xs); color: var(--text-tertiary);">Digital Transformation Spend</span>
+                    </div>
+                </div>
+                <p style="text-align: center; color: var(--text-secondary); margin-top: var(--space-4); font-size: var(--text-sm);">
+                    Adapted from portfolio management frameworks. See <a href="https://www.hcltech.com/brochures/digital-analytics/scaling-digital-across-enterprise-fenix-20" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: underline;">HCL's FENIX 2.0</a> for the original enterprise context.
+                </p>
+            </div>
+
+            <!-- Strategic Implications -->
+            <div class="features-grid" style="margin-bottom: var(--space-12);">
+                <div class="feature-card" style="border-left: 4px solid var(--success);">
+                    <h3 style="color: var(--success-700);">Innovation Work (Q1 & Q2)</h3>
+                    <p style="margin-bottom: var(--space-4);">Requires <strong>Force Multipliers</strong>: high technical skill + high agency. These people identify problems, research solutions, and execute autonomously.</p>
+                    <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0;">Hungry Learners can support in Q2 (Innovation @ Scale) where there's structure to learn from. Keep them out of Q1 until skills mature.</p>
+                </div>
+
+                <div class="feature-card" style="border-left: 4px solid var(--primary);">
+                    <h3 style="color: var(--primary-700);">Structured Delivery (Q3)</h3>
+                    <p style="margin-bottom: var(--space-4);"><strong>Competent performers</strong> with moderate agency excel here. Established patterns, clear requirements, predictable work.</p>
+                    <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0;">Brilliant Passengers (high skill, low agency) can thrive in Q3 where direction is provided. They'd struggle in Q1/Q2 innovation contexts.</p>
+                </div>
+
+                <div class="feature-card" style="border-left: 4px solid var(--text-secondary);">
+                    <h3 style="color: var(--text-secondary);">Maintenance Work (Q4)</h3>
+                    <p style="margin-bottom: var(--space-4);">Lower skill levels acceptable. Routine updates, legacy maintenance, following established procedures.</p>
+                    <p style="font-size: var(--text-sm); color: var(--text-secondary); margin: 0;">Don't waste Force Multipliers on Q4 work. They'll get bored and leave. This quadrant can absorb employees who aren't suited for high-stakes work.</p>
+                </div>
+            </div>
+
+            <!-- Call to Action -->
+            <div style="max-width: 900px; margin: 0 auto; background: var(--primary-600); color: white; text-align: center; padding: var(--space-12); border: 1px solid var(--primary-700); border-radius: var(--radius-xl);">
+                <h3 style="color: white; margin: 0 0 var(--space-4) 0; font-size: var(--text-2xl);">The Strategic Question</h3>
+                <p style="color: rgba(255, 255, 255, 0.95); margin: 0 0 var(--space-6) 0; font-size: var(--text-lg);">Do you know which quadrant each of your projects falls into—and whether you have the right people assigned?</p>
+                <a href="{% landing_url 'portfolio_strategy' %}" class="btn" style="background: var(--bg-card); color: var(--primary-700); font-weight: 600;">Learn Portfolio Strategy →</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Related Frameworks Section -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">Complete Your Performance Framework</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 3rem; max-width: 800px; margin-left: auto; margin-right: auto;">
+                The Dreyfus Model measures <strong>technical skill</strong>, but that's only half the picture. High performers combine skill with ownership mindset.
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
+                <div class="feature-card">
+                    <h3 style="margin-bottom: 1rem;">5 Levels of Agency</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        Technical skill alone doesn't predict performance. Learn how to identify high-agency employees who operate autonomously vs those who wait for instructions.
+                    </p>
+                    <a href="{% landing_url 'agency_levels' %}" class="btn btn-secondary" style="display: inline-block;">Read Agency Framework →</a>
+                </div>
+
+                <div class="feature-card">
+                    <h3 style="margin-bottom: 1rem;">Performance Matrix</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        See how Dreyfus skill levels + Agency levels create four archetypes: Force Multipliers, Brilliant Passengers, Stalled Juniors, and Risk Takers.
+                    </p>
+                    <a href="{% landing_url 'performance_matrix' %}" class="btn btn-secondary" style="display: inline-block;">See the Matrix →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Use These Frameworks in Your Reviews</h2>
+            <p>Blik comes with these questionnaires built in. Use them as-is or customize them for your team.</p>
+            <div class="hero-cta">
+                <a href="{% landing_url 'signup' %}" class="btn btn-primary">Start Free Trial</a>
+                <a href="https://github.com/thijsdezoete/blik" class="btn btn-secondary" target="_blank" rel="noopener">Self-Host (Free)</a>
+            </div>
+
+            <div class="cta-box">
+                <h3>Ready-to-Use or Fully Managed</h3>
+                <p>Self-host for free if you want full control, or use the managed EU-hosted version for €49/month if you don't want to deal with infrastructure. Same questionnaires either way.</p>
+                <a href="{% landing_url 'signup' %}" class="btn btn-primary" style="display: inline-block;">View Plans</a>
+            </div>
+
+        </div>
+    </section>
+
+    {% include "landing/includes/article_metadata.html" with template_path="landing/dreyfus_model.html" %}
+{% endblock %}

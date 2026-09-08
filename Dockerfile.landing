@@ -1,0 +1,65 @@
+# Lightweight container for landing/marketing pages
+# Multi-stage build: first stage generates git metadata, second stage runs the app
+
+# =============================================================================
+# Stage 1: Generate git metadata (requires git)
+# =============================================================================
+FROM python:3.11-slim AS metadata-builder
+
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . .
+
+# Generate git metadata JSON for all landing templates
+RUN python scripts/generate_git_metadata.py
+
+# =============================================================================
+# Stage 2: Runtime (no git needed)
+# =============================================================================
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_SYSTEM_PYTHON=1
+
+# Install system dependencies including fonts for OG image generation
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    fonts-liberation \
+    fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Set work directory
+WORKDIR /app
+
+# Copy project files
+COPY . .
+
+# Copy generated git metadata from builder stage
+COPY --from=metadata-builder /app/landing/git_metadata_cache.json /app/landing/git_metadata_cache.json
+
+# Install Python dependencies using uv
+RUN uv pip install --system -e .
+
+# Create directory for static files
+RUN mkdir -p /app/staticfiles
+
+# Collect static files (landing pages only need static assets)
+RUN DJANGO_SETTINGS_MODULE=landing_settings python manage.py collectstatic --noinput --clear
+
+# Expose port (configurable via environment)
+EXPOSE 8001
+
+# Run entrypoint script
+COPY docker-entrypoint-landing.sh /docker-entrypoint-landing.sh
+RUN chmod +x /docker-entrypoint-landing.sh
+
+ENTRYPOINT ["/docker-entrypoint-landing.sh"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8001", "--workers", "2", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "landing_wsgi:application"]

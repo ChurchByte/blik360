@@ -1,0 +1,400 @@
+{% extends "admin_dashboard/base.html" %}
+
+{% block title %}Review Cycles{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Review Cycles</h1>
+        <p>Manage 360-degree feedback review cycles</p>
+    </div>
+    <a href="{% url 'review_cycle_create' %}" class="btn btn-primary">Create Review Cycle</a>
+</div>
+
+{% if cycles_with_latest %}
+<div class="card">
+    <div class="card-body">
+        <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Reviewee</th>
+                    <th>Questionnaire</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                    <th style="width: 50px; text-align: center;" title="Show API Identifiers">
+                        <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in cycles_with_latest %}
+                <tr>
+                    <td>
+                        <div style="font-weight: 500;">{{ item.cycle.reviewee.name }}</div>
+                        <div style="font-size: 0.875rem; color: #64748b;">{{ item.cycle.reviewee.email }}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight: 500;">{{ item.cycle.questionnaire.name }}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.125rem;">{{ item.cycle.questionnaire.report_type_label }}</div>
+                    </td>
+                    <td>
+                        {% if item.cycle.status == 'active' %}
+                        <span class="badge badge-warning">Active</span>
+                        {% else %}
+                        <span class="badge badge-success">Completed</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="font-size: 0.875rem; color: #64748b; margin-bottom: 0.25rem;">
+                            {{ item.cycle.completed_count }} / {{ item.cycle.token_count }} responses
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: {% widthratio item.cycle.completed_count item.cycle.token_count 100 %}%;"></div>
+                        </div>
+                    </td>
+                    <td style="color: #64748b; font-size: 0.875rem;">
+                        {{ item.cycle.created_at|date:"M d, Y" }}
+                    </td>
+                    <td>
+                        {% if perms.accounts.can_manage_organization %}
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <!-- Split button: New Cycle (main action) + dropdown for other questionnaires -->
+                            <div class="btn-group" style="position: relative; display: inline-flex;">
+                                <!-- Main action button: Create cycle with last-used or default questionnaire -->
+                                <form method="POST" action="{% url 'quick_cycle_create' item.cycle.reviewee.id %}" style="margin: 0; display: inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="source_cycle_uuid" value="{{ item.cycle.uuid }}">
+                                    {% if item.latest_questionnaire %}
+                                    <input type="hidden" name="questionnaire_id" value="{{ item.latest_questionnaire.id }}">
+                                    {% else %}
+                                    {% for q in questionnaires %}
+                                        {% if q.is_default %}
+                                        <input type="hidden" name="questionnaire_id" value="{{ q.id }}">
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% endif %}
+                                    <button type="submit" class="btn btn-sm btn-primary" style="border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 1px solid rgba(255,255,255,0.3);">
+                                        New Cycle
+                                    </button>
+                                </form>
+
+                                <!-- Dropdown toggle button -->
+                                <button
+                                    class="btn btn-sm btn-primary"
+                                    type="button"
+                                    data-toggle="cycle-{{ item.cycle.id }}"
+                                    style="border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0.25rem 0.5rem; border-left: 1px solid rgba(255,255,255,0.3);"
+                                    title="Select different questionnaire"
+                                >
+                                    ▾
+                                </button>
+
+                                <!-- Dropdown menu with fixed positioning -->
+                                <div class="dropdown-menu" id="cycle-{{ item.cycle.id }}" style="display: none; position: fixed; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); min-width: 300px; z-index: 9999; margin-top: 0.25rem;">
+                                    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); background: var(--bg-light);">
+                                        <div style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary); margin-bottom: 0.25rem;">
+                                            Select Questionnaire
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                                            <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                                                ✓ = Quick create (button action)
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {% for q in questionnaires %}
+                                    {% if item.latest_questionnaire and item.latest_questionnaire.id == q.id or not item.latest_questionnaire and q.is_default %}
+                                        {# This is the questionnaire that will be used for quick create #}
+                                        <form method="POST" action="{% url 'quick_cycle_create' item.cycle.reviewee.id %}" style="margin: 0;">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="source_cycle_uuid" value="{{ item.cycle.uuid }}">
+                                            <input type="hidden" name="questionnaire_id" value="{{ q.id }}">
+                                            <button type="submit" class="dropdown-item" style="width: 100%; text-align: left; padding: 0.625rem 1rem; border: none; background: none; cursor: pointer; font-size: 0.875rem; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s; color: var(--text-primary); border-left: 3px solid var(--primary);">
+                                                <span style="flex: 1; padding-right: 0.5rem; font-weight: 500;">{{ q.name }}</span>
+                                                <span class="badge badge-primary" style="font-size: 0.75rem; background: var(--primary); color: white; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                                    <span>✓</span>
+                                                    <span>Quick create</span>
+                                                </span>
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <form method="POST" action="{% url 'quick_cycle_create' item.cycle.reviewee.id %}" style="margin: 0;">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="source_cycle_uuid" value="{{ item.cycle.uuid }}">
+                                            <input type="hidden" name="questionnaire_id" value="{{ q.id }}">
+                                            <button type="submit" class="dropdown-item" style="width: 100%; text-align: left; padding: 0.625rem 1rem; border: none; background: none; cursor: pointer; font-size: 0.875rem; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s; color: var(--text-primary);">
+                                                <span style="flex: 1; padding-right: 0.5rem;">{{ q.name }}</span>
+                                                {% if q.is_default %}
+                                                <span class="badge badge-secondary" style="font-size: 0.75rem;">Default</span>
+                                                {% endif %}
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <a href="{% url 'review_cycle_detail' item.cycle.uuid %}" class="btn btn-sm btn-secondary">View</a>
+                        </div>
+                        {% else %}
+                        <a href="{% url 'review_cycle_detail' item.cycle.uuid %}" class="btn btn-sm btn-secondary">View</a>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        <button onclick="showUuidModal('{{ item.cycle.uuid }}', '{{ item.cycle.reviewee.uuid }}', '{{ item.cycle.reviewee.name|escapejs }}')"
+                                style="background: none; border: none; cursor: pointer; color: var(--text-secondary); padding: 0.25rem; display: inline-flex; align-items: center; justify-content: center;"
+                                title="Show API Identifiers">
+                            <svg style="width: 18px; height: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    {% if cycles.has_other_pages %}
+    <div class="card-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: var(--text-secondary); font-size: 0.875rem;">Items per page:</span>
+            <select onchange="window.location.href='?per_page=' + this.value" style="padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary);">
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+        </div>
+        <div class="pagination">
+            {% if cycles.has_previous %}
+                <a href="?page=1&per_page={{ per_page }}" class="pagination-link">First</a>
+                <a href="?page={{ cycles.previous_page_number }}&per_page={{ per_page }}" class="pagination-link">Previous</a>
+            {% endif %}
+
+            <span class="pagination-info">
+                Page {{ cycles.number }} of {{ cycles.paginator.num_pages }}
+            </span>
+
+            {% if cycles.has_next %}
+                <a href="?page={{ cycles.next_page_number }}&per_page={{ per_page }}" class="pagination-link">Next</a>
+                <a href="?page={{ cycles.paginator.num_pages }}&per_page={{ per_page }}" class="pagination-link">Last</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <h3 style="margin-bottom: 0.5rem;">No review cycles yet</h3>
+            <p style="margin-bottom: 1.5rem;">Create your first review cycle to start collecting feedback</p>
+            <a href="{% url 'review_cycle_create' %}" class="btn btn-primary">Create Review Cycle</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<style>
+.dropdown-item:hover {
+    background-color: var(--bg-light);
+}
+.btn-group {
+    position: relative;
+    display: inline-flex;
+}
+</style>
+
+<script>
+// Handle dropdown toggle with proper positioning
+document.addEventListener('DOMContentLoaded', function() {
+    const dropdownToggles = document.querySelectorAll('[data-toggle^="cycle-"]');
+
+    dropdownToggles.forEach(toggle => {
+        toggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const dropdownId = this.getAttribute('data-toggle');
+            const menu = document.getElementById(dropdownId);
+
+            // Close all other dropdowns
+            document.querySelectorAll('.dropdown-menu').forEach(m => {
+                if (m.id !== dropdownId) {
+                    m.style.display = 'none';
+                }
+            });
+
+            // Toggle this dropdown
+            const isVisible = menu.style.display === 'block';
+
+            if (!isVisible) {
+                // Position the dropdown relative to the button
+                const rect = this.getBoundingClientRect();
+                menu.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+                menu.style.left = (rect.left + window.scrollX) + 'px';
+                menu.style.display = 'block';
+            } else {
+                menu.style.display = 'none';
+            }
+        });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.btn-group')) {
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.style.display = 'none';
+            });
+        }
+    });
+
+    // Prevent dropdown from closing when clicking inside it
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        menu.addEventListener('click', function(e) {
+            // Let form submissions go through (they'll navigate away anyway)
+            if (e.target.closest('form')) {
+                return;
+            }
+            e.stopPropagation();
+        });
+    });
+});
+
+// UUID Modal functions
+function showUuidModal(cycleUuid, revieweeUuid, revieweeName) {
+    const modal = document.getElementById('uuid-modal');
+    if (!modal) {
+        createUuidModal();
+    }
+
+    document.getElementById('modal-reviewee-name').textContent = revieweeName;
+    document.getElementById('modal-cycle-uuid').textContent = cycleUuid;
+    document.getElementById('modal-reviewee-uuid').textContent = revieweeUuid;
+
+    document.getElementById('uuid-modal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeUuidModal() {
+    document.getElementById('uuid-modal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+function createUuidModal() {
+    const modal = document.createElement('div');
+    modal.id = 'uuid-modal';
+    // Reuse the existing .modal-overlay styling (fixed backdrop + centered flex).
+    modal.className = 'modal-overlay';
+    modal.style.display = 'none';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 600px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                <h3 style="margin: 0;">API Identifiers</h3>
+                <button onclick="closeUuidModal()" aria-label="Close"
+                        style="background: none; border: none; cursor: pointer; font-size: 1.5rem; line-height: 1; color: var(--text-secondary); padding: 0.25rem 0.5rem; border-radius: 6px;">
+                    &times;
+                </button>
+            </div>
+            <div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    Use these UUIDs when accessing the REST API for <strong id="modal-reviewee-name"></strong>
+                </p>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Cycle UUID</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <code id="modal-cycle-uuid" class="uuid-display"></code>
+                        <button onclick="copyUuid('modal-cycle-uuid')" class="btn btn-sm btn-secondary">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Reviewee UUID</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <code id="modal-reviewee-uuid" class="uuid-display"></code>
+                        <button onclick="copyUuid('modal-reviewee-uuid')" class="btn btn-sm btn-secondary">Copy</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Close on outside click
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeUuidModal();
+        }
+    });
+}
+
+function copyUuid(elementId) {
+    const element = document.getElementById(elementId);
+    const text = element.textContent;
+
+    navigator.clipboard.writeText(text).then(() => {
+        showCopyFeedback('UUID copied to clipboard');
+    }).catch(() => {
+        // Fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showCopyFeedback('UUID copied to clipboard');
+    });
+}
+
+function showCopyFeedback(message) {
+    const existing = document.getElementById('copy-feedback');
+    if (existing) existing.remove();
+
+    const feedback = document.createElement('div');
+    feedback.id = 'copy-feedback';
+    feedback.className = 'copy-feedback';
+    feedback.textContent = message;
+    document.body.appendChild(feedback);
+
+    setTimeout(() => feedback.classList.add('show'), 10);
+    setTimeout(() => {
+        feedback.classList.remove('show');
+        setTimeout(() => feedback.remove(), 300);
+    }, 2000);
+}
+</script>
+
+<style>
+.uuid-display {
+    flex: 1;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.875rem;
+    overflow: auto;
+    word-break: break-all;
+}
+
+.copy-feedback {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--success);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    transform: translateY(1rem);
+    transition: all 0.3s ease;
+    z-index: 10000;
+}
+
+.copy-feedback.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+</style>
+{% endblock %}

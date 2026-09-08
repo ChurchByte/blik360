@@ -1,0 +1,29 @@
+Welcome to {{ site_name }}
+
+Hello {{ user.username }},
+
+Your {{ site_name }} account has been created and is ready to use. You can now start creating 360-degree feedback cycles for your organization.
+
+YOUR LOGIN CREDENTIALS
+=======================
+Email: {{ user.email }}{% if password %}
+Password: {{ password }}{% endif %}
+
+Login URL: {{ login_url }}
+
+{% if password %}IMPORTANT: Please change your password after your first login for security.{% endif %}
+
+GETTING STARTED
+===============
+1. Login to your dashboard using the credentials above
+2. Add reviewees (employees) to your organization
+3. Create a review cycle and invite reviewers
+4. Monitor progress and generate reports
+
+If you have any questions, please don't hesitate to reach out to our support team.
+
+Best regards,
+The {{ site_name }} Team
+
+---
+This email was sent to {{ user.email }} because a subscription was created for your organization.
