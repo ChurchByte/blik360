@@ -31,6 +31,7 @@ class SetupMiddleware:
             '/health/',
             '/api/',  # Stripe webhooks
             '/landing/',  # Landing pages
+            '/license/',  # License & Credits (AGPL notices)
         ]
 
         # Check if current path is allowed
@@ -71,6 +72,7 @@ class OrganizationMiddleware:
             '/media/',
             '/landing/',
             '/accounts/',
+            '/license/',
         ]
 
         if any(request.path.startswith(path) for path in exempt_paths):

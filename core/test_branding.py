@@ -90,7 +90,7 @@ class LogoSettingsAndServingTests(TestCase):
 
     def test_logo_replaces_wordmark_in_dashboard_header(self):
         page = self.client.get(reverse('settings')).content.decode()
-        self.assertIn('class="navbar-brand">Blik</a>', page)
+        self.assertIn('class="navbar-brand">Lead360</a>', page)
 
         set_organization_logo(self.org, make_image())
         self.org.refresh_from_db()
@@ -114,7 +114,7 @@ class LogoSettingsAndServingTests(TestCase):
 
     def test_favicon_upload_replaces_default_icon_on_all_pages(self):
         page = self.client.get(reverse('settings')).content.decode()
-        self.assertIn('image/svg+xml', page)  # default Blik icon
+        self.assertIn('image/svg+xml', page)  # default Lead360 icon
 
         response = self.client.post(reverse('update_favicon'), {'favicon': make_image(size=(64, 64))})
         self.assertEqual(response.status_code, 302)

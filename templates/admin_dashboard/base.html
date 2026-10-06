@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Admin Dashboard{% endblock %} - Blik</title>
+    <title>{% block title %}Admin Dashboard{% endblock %} - Lead360</title>
 
     <!-- Favicon -->
     {% include "components/favicon.html" %}
@@ -40,7 +40,7 @@
     <nav class="navbar">
         <div class="navbar-content">
             <div class="navbar-header">
-                <a href="{% url 'admin_dashboard' %}" class="navbar-brand">{% if brand_logo_url %}<img src="{{ brand_logo_url }}" alt="{{ brand_name }}" class="navbar-logo">{% else %}Blik{% endif %}</a>
+                <a href="{% url 'admin_dashboard' %}" class="navbar-brand">{% if brand_logo_url %}<img src="{{ brand_logo_url }}" alt="{{ brand_name }}" class="navbar-logo">{% else %}Lead360{% endif %}</a>
                 <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle menu">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -143,5 +143,6 @@
             updateIcon(next);
         });
     </script>
+{% include "components/site_footer.html" %}
 </body>
 </html>

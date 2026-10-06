@@ -1,5 +1,5 @@
 /**
- * Blik Report Charts
+ * Lead360 Report Charts
  * Mobile-first chart rendering with theme support
  */
 

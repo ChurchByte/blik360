@@ -1,5 +1,5 @@
 """
-Management command to generate realistic demo data for Blik.
+Management command to generate realistic demo data for Lead360.
 Creates diverse reviewees, cycles in various states, and realistic response patterns.
 """
 from django.core.management.base import BaseCommand
@@ -18,7 +18,7 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = 'Generate realistic demo data for Blik showcase'
+    help = 'Generate realistic demo data for Lead360 showcase'
 
     def add_arguments(self, parser):
         parser.add_argument(

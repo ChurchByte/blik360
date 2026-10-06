@@ -1,7 +1,7 @@
 """
 Custom organization branding: logo and favicon upload, storage and lookup.
 
-The logo replaces the "Blik" wordmark in the dashboard header, appears at the
+The logo replaces the "Lead360" wordmark in the dashboard header, appears at the
 top of public pages (login, feedback forms, reports) and at the top of
 outgoing HTML emails. The favicon replaces the default browser-tab icon.
 """

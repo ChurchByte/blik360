@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "=========================================="
-echo "Blik Screenshot Generation (Docker)"
+echo "Lead360 Screenshot Generation (Docker)"
 echo "=========================================="
 echo ""
 

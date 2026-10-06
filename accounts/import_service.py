@@ -1,5 +1,5 @@
 """
-Import Service for Blik Organization Data
+Import Service for Lead360 Organization Data
 
 This module provides functionality to import previously exported organization data,
 enabling backup restoration, data migration, and organization cloning.

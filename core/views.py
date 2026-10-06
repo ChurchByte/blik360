@@ -147,12 +147,12 @@ def setup_email(request):
     if request.method == 'POST':
         form = SetupEmailForm(request.POST)
 
-        # Auto-skip for SaaS customers if they choose to use Blik mailer
+        # Auto-skip for SaaS customers if they choose to use Lead360 mailer
         use_blik_mailer = request.POST.get('use_blik_mailer') == 'true'
 
         if use_blik_mailer and has_subscription:
-            # Use default Blik email settings (already configured in Django settings)
-            messages.success(request, 'Using Blik\'s managed email service. All set!')
+            # Use default Lead360 email settings (already configured in Django settings)
+            messages.success(request, 'Using Lead360\'s managed email service. All set!')
             return redirect('setup_complete')
 
         if form.is_valid():

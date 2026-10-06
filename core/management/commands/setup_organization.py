@@ -47,7 +47,7 @@ class Command(BaseCommand):
 
         if created:
             # First run: use env vars with sensible defaults
-            org.name = options.get('name') or os.getenv('ORGANIZATION_NAME', 'Blik Organization')
+            org.name = options.get('name') or os.getenv('ORGANIZATION_NAME', 'Lead360 Organization')
             org.email = options.get('email') or os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
             org.smtp_host = os.getenv('EMAIL_HOST', '')
             org.smtp_port = self.smtp_port(os.getenv('EMAIL_PORT', DEFAULT_SMTP_PORT))

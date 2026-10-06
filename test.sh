@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Blik Test Runner
+# Lead360 Test Runner
 # Zero-config Docker-based testing
 #
 
@@ -149,7 +149,7 @@ if [ "$MODE" = "shell" ]; then
 fi
 
 # Mode: Run tests (default)
-print_header "Running Blik Tests"
+print_header "Running Lead360 Tests"
 
 # Ensure services are running
 print_info "Starting test services..."

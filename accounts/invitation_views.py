@@ -73,11 +73,11 @@ def send_invitation(request):
         # Send invitation email
         try:
             send_email(
-                subject=f'Invitation to join {org.name} on Blik',
+                subject=f'Invitation to join {org.name} on Lead360',
                 message=f'''
 Hello,
 
-You've been invited to join {org.name} on Blik 360 Feedback Platform.
+You've been invited to join {org.name} on Lead360.
 
 Click the link below to accept this invitation and create your account:
 {invite_url}
@@ -94,7 +94,7 @@ Best regards,
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2>You're Invited!</h2>
-        <p>You've been invited to join <strong>{org.name}</strong> on Blik 360 Feedback Platform.</p>
+        <p>You've been invited to join <strong>{org.name}</strong> on Lead360.</p>
         <p style="margin: 30px 0;">
             <a href="{invite_url}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 8px;">Accept Invitation</a>
         </p>

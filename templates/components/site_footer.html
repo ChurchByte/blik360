@@ -1,0 +1,30 @@
+{% comment %}
+Site-wide footer: product identity, attribution to the upstream Blik project,
+and the AGPL-3.0 "Appropriate Legal Notices" link (License & Credits) plus a
+link to the Corresponding Source. Self-contained styles so it renders on pages
+that do not load main.css. Pass on_brand=True on coloured-background pages.
+{% endcomment %}
+<style>
+    .site-footer { width: 100%; box-sizing: border-box; margin-top: 2.5rem; padding: 1.25rem 1rem 1.5rem; text-align: center; font-size: 0.8125rem; line-height: 1.6; color: var(--text-secondary, #64748b); }
+    .site-footer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+    .site-footer a:hover { color: var(--text-primary, #0f172a); }
+    .site-footer .site-footer-sep { margin: 0 0.4rem; opacity: 0.6; }
+    .site-footer .site-footer-product { font-weight: 600; }
+    .site-footer.site-footer--on-brand { color: rgba(255, 255, 255, 0.85); }
+    .site-footer.site-footer--on-brand a:hover { color: #ffffff; }
+    @media print { .site-footer { display: none; } }
+</style>
+<footer class="site-footer{% if on_brand %} site-footer--on-brand{% endif %}" role="contentinfo">
+    <div>
+        <span class="site-footer-product">{{ PRODUCT_NAME }}</span> is a product of <a href="{{ PRODUCT_COMPANY_URL }}" target="_blank" rel="noopener">{{ PRODUCT_COMPANY }}</a>
+        <span class="site-footer-sep" aria-hidden="true">&middot;</span>
+        Based on <a href="{{ UPSTREAM_URL }}" target="_blank" rel="noopener">{{ UPSTREAM_NAME }}</a> by {{ UPSTREAM_AUTHOR }}
+    </div>
+    <div>
+        <a href="{% url 'license' %}">License &amp; Credits</a>
+        <span class="site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="{{ PRODUCT_SOURCE_URL }}" target="_blank" rel="noopener">Source code</a>
+        <span class="site-footer-sep" aria-hidden="true">&middot;</span>
+        Licensed under {{ LICENSE_SPDX }}, provided without warranty
+    </div>
+</footer>

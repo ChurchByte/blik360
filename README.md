@@ -1,12 +1,14 @@
-# Blik
+# Lead360
 
-Self-hosted 360-degree feedback and performance review system.
+**A ChurchByte product.** Self-hosted 360-degree feedback and performance review system.
 
-Blik is an open-source application for conducting anonymous 360-degree feedback reviews. Built with Django, it provides organizations with a privacy-focused alternative to commercial performance review platforms.
+> Lead360 is a modified version of [Blik](https://github.com/thijsdezoete/blik), created by Thijs de Zoete and contributors, and is distributed under the same AGPL-3.0 license. It is not the original Blik software and is not endorsed by its original authors. See [NOTICE](NOTICE) and the in-app **License & Credits** page (`/license/`, linked from every page footer).
+
+Lead360 is an open-source application for conducting anonymous 360-degree feedback reviews. Built with Django, it provides organizations with a privacy-focused alternative to commercial performance review platforms.
 
 ## Quick Start
 
-Blik supports two local startup modes:
+Lead360 supports two local startup modes:
 
 - `docker run` starts the standalone app container and uses SQLite by default
 - `docker compose` starts the full development stack and uses PostgreSQL by default
@@ -35,7 +37,7 @@ docker run -d --name blik -p 8000:8000 \
 
 **One-Click Deploy Options:**
 
-[![Deploy to DigitalOcean](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/thijsdezoete/blik/tree/master)
+[![Deploy to DigitalOcean](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/ChurchByte/blik360/tree/master)
 
 - **DigitalOcean App Platform** - Fully managed PaaS (~$20/month) - [Guide](docs/DIGITALOCEAN.md)
 - **Dokploy** - Self-hosted deployment platform - [Guide](docs/DEPLOYMENT.md)
@@ -68,7 +70,7 @@ See complete guides for:
 
 ## Privacy and Security
 
-Blik implements several measures to ensure reviewer anonymity:
+Lead360 implements several measures to ensure reviewer anonymity:
 
 - Token-based access without user authentication for reviewers
 - Configurable minimum response thresholds before displaying results
@@ -127,8 +129,8 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for complete environment variable d
 ### Local Setup
 
 ```bash
-git clone https://github.com/thijsdezoete/blik.git
-cd blik
+git clone https://github.com/ChurchByte/blik360.git
+cd blik360
 cp .env.example .env
 docker compose up -d --build
 ```
@@ -145,7 +147,7 @@ Then visit `http://localhost:8000/setup/` to complete setup.
 
 ### Contributing
 
-See the [Issues](https://github.com/thijsdezoete/blik/issues) page for current development tasks. Contributors welcome for:
+See the [Issues](https://github.com/ChurchByte/blik360/issues) page for current development tasks. Contributors welcome for:
 
 - Core application development
 - UI/UX design
@@ -171,8 +173,12 @@ See the [Issues](https://github.com/thijsdezoete/blik/issues) page for current d
 - **Email:** SMTP integration (supports Gmail, SendGrid, AWS SES, Mailgun, etc.)
 
 
-## License
+## License & Credits
 
-Blik is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE) for details.
+Lead360 is a modified version of [Blik](https://github.com/thijsdezoete/blik) by Thijs de Zoete and contributors. Modifications by ChurchByte began in September 2026; the commit history of this repository records each change and its date.
+
+Like Blik, Lead360 is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE) for details.
+
+Because the AGPL requires the source of a network-hosted modified version to be offered to its users, every page footer links to the License & Credits page and to this repository. If you deploy a fork, set `PRODUCT_SOURCE_URL` to your own public repository.
 
 The AGPL license ensures that any modifications used to provide a network service must be made available as open source, while allowing free use for internal organizational purposes.

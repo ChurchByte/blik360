@@ -16,6 +16,7 @@ handler500 = 'blik.views.handler500'
 urlpatterns = [
     path('', views.home, name='home'),
     path('health/', views.health_check, name='health_check'),
+    path('license/', views.license_page, name='license'),
     path('sitemap.xml', seo_views.sitemap, name='sitemap'),
     path('robots.txt', seo_views.robots, name='robots'),
     path('branding/<int:org_id>/<str:kind>/', core_views.organization_brand_image, name='organization_brand_image'),
