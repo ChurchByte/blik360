@@ -370,6 +370,23 @@ def reviewee_create(request):
                 messages.error(request, error_message)
                 return redirect('reviewee_list')
 
+            # A deleted reviewee is only deactivated (soft delete), so the
+            # (organization, email) unique constraint still applies.
+            # Reactivate the existing record instead of failing.
+            existing = Reviewee.objects.filter(
+                organization=organization, email__iexact=email
+            ).first()
+            if existing:
+                if existing.is_active:
+                    messages.error(request, f'A reviewee with the email "{email}" already exists.')
+                    return render(request, 'admin_dashboard/reviewee_form.html', {'action': 'Create'})
+                existing.name = name
+                existing.department = department
+                existing.is_active = True
+                existing.save()
+                messages.success(request, f'Reviewee "{existing.name}" reactivated successfully.')
+                return redirect('reviewee_list')
+
             try:
                 reviewee = Reviewee.objects.create(
                     organization=organization,
