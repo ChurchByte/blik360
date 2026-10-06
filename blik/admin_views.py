@@ -559,6 +559,19 @@ def quick_cycle_create(request, reviewee_id):
             f'Go to the cycle details to assign reviewers and send invitations.'
         )
 
+    # Email the reviewee their self-assessment link and the per-category
+    # invitation links (peer / manager / direct report) to share. Deferred to
+    # after-commit so SMTP latency can't stall the request (matches
+    # review_cycle_create).
+    from reviews.services import send_reviewee_notifications
+    transaction.on_commit(
+        lambda c=cycle: send_reviewee_notifications(c, request)
+    )
+    messages.info(
+        request,
+        f'Self-assessment and invitation-link emails are being sent to {reviewee.name}.'
+    )
+
     # Redirect to cycle detail page
     return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
 
