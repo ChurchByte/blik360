@@ -645,9 +645,9 @@
             <!-- Delete Account -->
             <div style="padding-left: 1.5rem; border-left: 1px solid var(--border-color);">
                 <h3 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 6px; color: #dc2626;">Delete Account</h3>
-                {% if perms.accounts.can_transfer_ownership and not user.is_superuser %}
+                {% if is_last_owner %}
                     <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.8125rem;">
-                        You are the owner. Transfer ownership on the Team page first, or delete the organization.
+                        You are the only Owner. Make someone else an Owner on the Team page first, or delete the organization.
                     </p>
                     <button class="btn btn-danger btn-sm" disabled>Delete Account</button>
                 {% else %}

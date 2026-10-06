@@ -136,13 +136,13 @@ def delete_user_account(user):
     if hasattr(user, 'profile'):
         org = user.profile.organization
 
-        # The owner must hand over ownership first (or delete the organization),
-        # otherwise nobody could manage billing or the audit log.
-        from accounts.permissions import OWNER
-        if OWNER in get_user_roles(user):
+        # The last Owner must add another Owner first (or delete the
+        # organization), otherwise nobody could manage billing or the audit log.
+        from accounts.permissions import is_last_owner
+        if is_last_owner(user):
             raise ValueError(
-                "You are the organization owner. Transfer ownership to someone else on the "
-                "Team page first, or delete the organization instead."
+                "You are the only Owner. Make someone else an Owner on the Team page first, "
+                "or delete the organization instead."
             )
 
     # Delete user (cascades to profile, tokens, etc.)

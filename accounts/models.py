@@ -37,7 +37,7 @@ class UserProfile(TimeStampedModel):
             # Owner
             ('can_manage_billing', 'Can manage billing and subscription'),
             ('can_delete_organization', 'Can delete organization'),
-            ('can_transfer_ownership', 'Can transfer organization ownership'),
+            ('can_manage_owners', 'Can add and remove owners'),
             ('can_view_audit_log', 'Can view the audit log'),
             # Organization Admin
             ('can_invite_members', 'Can invite team members'),
@@ -78,6 +78,34 @@ class EmailMFACode(models.Model):
 
     def __str__(self):
         return f"MFA code for {self.user_id} ({self.created_at:%Y-%m-%d %H:%M})"
+
+
+class TrustedDevice(models.Model):
+    """
+    A browser the user chose to remember after passing email MFA, so they
+    aren't asked for a code there again until it expires.
+
+    The browser holds a random token in a signed cookie; only a hash of the
+    token is stored here. Deleting the row revokes the device.
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='trusted_devices'
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'mfa_trusted_devices'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Trusted device for {self.user_id} until {self.expires_at:%Y-%m-%d}"
 
 
 class OrganizationInvitation(TimeStampedModel):

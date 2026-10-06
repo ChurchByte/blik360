@@ -8,8 +8,9 @@ least a Member.
     Role               Permissions (accounts.<codename>)
     -----------------  ---------------------------------------------------------
     Owner              can_manage_billing, can_delete_organization,
-                       can_transfer_ownership, can_view_audit_log
-                       (an Owner is always also an Organization Admin)
+                       can_manage_owners, can_view_audit_log
+                       (an Owner is always also an Organization Admin;
+                       an organization can have several Owners but never none)
     Organization Admin can_manage_organization, can_invite_members,
                        can_manage_cycles
     Cycle Manager      can_manage_cycles
@@ -66,14 +67,15 @@ ROLE_LABELS = {
 # Display order
 ROLE_ORDER = [OWNER, ORG_ADMIN, CYCLE_MANAGER, REPORT_VIEWER]
 
-# Roles an Organization Admin can grant or remove on the Team page. Owner is
-# only changed by transferring ownership.
+# Roles an Organization Admin can grant or remove on the Team page
+# (including on themselves). Only Owners can grant or remove Owner.
 ASSIGNABLE_ROLES = [ORG_ADMIN, CYCLE_MANAGER, REPORT_VIEWER]
+OWNER_ASSIGNABLE_ROLES = [OWNER] + ASSIGNABLE_ROLES
 
 PERMISSION_NAMES = {
     'can_manage_billing': 'Can manage billing and subscription',
     'can_delete_organization': 'Can delete organization',
-    'can_transfer_ownership': 'Can transfer organization ownership',
+    'can_manage_owners': 'Can add and remove owners',
     'can_view_audit_log': 'Can view the audit log',
     'can_invite_members': 'Can invite team members',
     'can_manage_organization': 'Can manage organization settings',
@@ -86,7 +88,7 @@ GROUP_PERMISSIONS = {
     ORG_OWNER_GROUP: [
         'can_manage_billing',
         'can_delete_organization',
-        'can_transfer_ownership',
+        'can_manage_owners',
         'can_view_audit_log',
     ],
     ORG_ADMIN_GROUP: [
@@ -227,8 +229,7 @@ def assign_organization_member(user, can_create_cycles_for_others=False):
     """
     Reset the user to a plain Member, optionally with the Cycle Manager role.
 
-    Used when someone joins from an invitation. Owners keep ownership — use
-    transfer_ownership() to change that.
+    Used when someone joins from an invitation. Owners keep ownership.
     """
     roles = {CYCLE_MANAGER} if can_create_cycles_for_others else set()
     if OWNER in get_user_roles(user):
@@ -244,34 +245,29 @@ def remove_from_all_org_groups(user):
     _clear_perm_cache(user)
 
 
-def get_organization_owner(organization):
-    """The User who owns the organization, or None."""
-    profile = (
-        UserProfile.objects.filter(
+def get_organization_owners(organization):
+    """Users who own the organization, earliest first."""
+    return [
+        p.user for p in UserProfile.objects.filter(
             organization=organization, user__groups__name=ORG_OWNER_GROUP
-        )
-        .select_related('user')
-        .order_by('user__date_joined')
-        .first()
-    )
-    return profile.user if profile else None
+        ).select_related('user').order_by('user__date_joined', 'user__id')
+    ]
 
 
-def transfer_ownership(organization, from_user, to_user):
-    """
-    Move the Owner role from `from_user` to `to_user` (same organization).
-    The previous owner stays an Organization Admin.
-    """
-    if from_user.pk == to_user.pk:
-        raise ValueError('You already own this organization.')
-    if not UserProfile.objects.filter(user=to_user, organization=organization).exists():
-        raise ValueError('The new owner must be a member of this organization.')
-    if not to_user.is_active:
-        raise ValueError('The new owner must have an active account.')
-    with transaction.atomic():
-        from_roles = get_user_roles(from_user)
-        set_user_roles(from_user, (from_roles - {OWNER}) | {ORG_ADMIN})
-        add_user_roles(to_user, OWNER, ORG_ADMIN)
+def count_owners(organization):
+    return UserProfile.objects.filter(
+        organization=organization, user__groups__name=ORG_OWNER_GROUP
+    ).count()
+
+
+def is_last_owner(user):
+    """True if the user is an Owner and nobody else in their organization is."""
+    if OWNER not in get_user_roles(user):
+        return False
+    profile = UserProfile.objects.filter(user=user).select_related('organization').first()
+    if profile is None:
+        return False
+    return count_owners(profile.organization) <= 1
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +275,12 @@ def transfer_ownership(organization, from_user, to_user):
 # ---------------------------------------------------------------------------
 
 def is_owner(user):
-    return user.has_perm('accounts.can_transfer_ownership')
+    return OWNER in get_user_roles(user)
+
+
+def can_manage_owners(user):
+    """Owners (and superusers) can make other people Owners or remove them."""
+    return user.has_perm('accounts.can_manage_owners')
 
 
 def is_organization_admin(user):

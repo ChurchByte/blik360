@@ -19,6 +19,9 @@ class Actions:
     MFA_CODE_SENT = 'auth.mfa_code_sent'
     MFA_VERIFIED = 'auth.mfa_verified'
     MFA_FAILED = 'auth.mfa_failed'
+    MFA_DEVICE_REMEMBERED = 'auth.mfa_device_remembered'
+    MFA_REMEMBERED_DEVICE = 'auth.mfa_remembered_device_used'
+    MFA_DEVICES_FORGOTTEN = 'auth.mfa_devices_forgotten'
 
     # Team and roles
     ROLES_CHANGED = 'team.roles_changed'
@@ -61,6 +64,9 @@ ACTION_LABELS = {
     Actions.MFA_CODE_SENT: 'Sign-in code sent',
     Actions.MFA_VERIFIED: 'Sign-in code verified',
     Actions.MFA_FAILED: 'Sign-in code rejected',
+    Actions.MFA_DEVICE_REMEMBERED: 'Device remembered for sign-in',
+    Actions.MFA_REMEMBERED_DEVICE: 'Signed in on a remembered device',
+    Actions.MFA_DEVICES_FORGOTTEN: 'Remembered devices forgotten',
     Actions.ROLES_CHANGED: 'Roles changed',
     Actions.OWNERSHIP_TRANSFERRED: 'Ownership transferred',
     Actions.MEMBER_INVITED: 'Member invited',

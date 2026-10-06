@@ -191,6 +191,28 @@ document.addEventListener('DOMContentLoaded', function() {
                         {% endfor %}
                     </div>
 
+                    {% if mfa_required or remembered_devices %}
+                    <hr>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Sign-in codes</span>
+                    </div>
+                    <div class="small text-muted mb-2">
+                        {% if mfa_required %}Your account needs a code from your email when you sign in.{% endif %}
+                        {% if remembered_devices %}
+                            {{ remembered_devices }} device{{ remembered_devices|pluralize }} currently skip{{ remembered_devices|pluralize:"s," }} the code.
+                        {% else %}
+                            No devices are remembered.
+                        {% endif %}
+                    </div>
+                    {% if remembered_devices %}
+                    <form method="post" action="{% url 'mfa_forget_devices' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-secondary w-100">Forget remembered devices</button>
+                    </form>
+                    {% endif %}
+                    {% endif %}
+
                     <hr>
 
                     <div class="text-muted small mb-2">

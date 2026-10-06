@@ -289,8 +289,8 @@ def delete_account(request):
         return redirect('settings')
 
     try:
-        from accounts.permissions import OWNER, get_user_roles
-        if OWNER not in get_user_roles(user):
+        from accounts.permissions import is_last_owner
+        if not is_last_owner(user):
             log_event(request, Actions.ACCOUNT_DELETED, details={'user_id': user.pk})
         delete_user_account(user)
         logout(request)

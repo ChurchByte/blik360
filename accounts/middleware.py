@@ -38,6 +38,7 @@ class MFAMiddleware:
             and not request.path.startswith(self.EXEMPT_PREFIXES)
             and not mfa.is_verified(request)
             and mfa.user_needs_mfa(user)
+            and not self._trusted_device(request)
         ):
             if request.path.startswith('/api/'):
                 return JsonResponse(
@@ -49,3 +50,18 @@ class MFAMiddleware:
                 url += '?' + urlencode({'next': request.get_full_path()})
             return redirect(url)
         return self.get_response(request)
+
+    @staticmethod
+    def _trusted_device(request):
+        """A remembered browser counts as verified for this session."""
+        device = mfa.trusted_device_for(request)
+        if device is None:
+            return False
+        from django.utils import timezone
+        from core.audit import log_event, Actions
+        device.last_used_at = timezone.now()
+        device.save(update_fields=['last_used_at'])
+        mfa.mark_verified(request)
+        log_event(request, Actions.MFA_REMEMBERED_DEVICE,
+                  details={'device_id': device.pk, 'expires': device.expires_at.date().isoformat()})
+        return True

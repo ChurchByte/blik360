@@ -269,6 +269,8 @@ _RUNNING_TESTS = len(_sys.argv) > 1 and _sys.argv[1] == 'test' or 'pytest' in _s
 MFA_REQUIRED = env.bool('MFA_REQUIRED', default=not _RUNNING_TESTS)
 MFA_CODE_TTL_MINUTES = 10
 MFA_MAX_ATTEMPTS = 5
+# "Remember this device" after a successful code skips the code on that browser.
+MFA_REMEMBER_DAYS = 30
 
 # Organization settings
 ORGANIZATION_NAME = env('ORGANIZATION_NAME', default='Blik')

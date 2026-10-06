@@ -95,15 +95,10 @@
                         <td>{{ user_profile.user.date_joined|date:"M d, Y" }}</td>
                         {% if perms.accounts.can_manage_organization %}
                         <td>
-                            {% if user_profile.user.id != request.user.id and not user_profile.user.is_superuser %}
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }})">
+                            {% if user_profile.user.id == request.user.id or not user_profile.user.is_superuser %}
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {% if user_profile.user.id == request.user.id %}true{% else %}false{% endif %}, {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }})">
                                 Manage roles
                             </button>
-                            {% if viewer_is_owner and not user_profile.is_owner %}
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="showTransferModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}')">
-                                Make owner
-                            </button>
-                            {% endif %}
                             {% else %}
                             <span style="color: var(--text-tertiary); font-size: 12px;">—</span>
                             {% endif %}
@@ -148,15 +143,10 @@
                         <span>{{ user_profile.user.date_joined|date:"M d, Y" }}</span>
                     </div>
                     {% if perms.accounts.can_manage_organization %}
-                        {% if user_profile.user.id != request.user.id and not user_profile.user.is_superuser %}
-                        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 0.5rem;" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }})">
+                        {% if user_profile.user.id == request.user.id or not user_profile.user.is_superuser %}
+                        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 0.5rem;" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {% if user_profile.user.id == request.user.id %}true{% else %}false{% endif %}, {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }})">
                             Manage roles
                         </button>
-                        {% if viewer_is_owner and not user_profile.is_owner %}
-                        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 0.5rem;" onclick="showTransferModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}')">
-                            Make owner
-                        </button>
-                        {% endif %}
                         {% endif %}
                     {% endif %}
                 </div>
@@ -285,11 +275,26 @@
             {% csrf_token %}
             <input type="hidden" id="roles-modal-user-id" name="user_profile_id">
 
-            <div id="roles-modal-owner-note" style="display: none; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 1rem; font-size: 0.875rem;">
-                This person is the <strong>Owner</strong> (billing, deleting the organization, audit log). The owner is always an Organization Admin.
+            <div id="roles-modal-self-note" style="display: none; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 1rem; font-size: 0.875rem;">
+                You're changing <strong>your own</strong> roles. If you remove Organization Admin you won't be able to manage the team any more.
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 1rem;">
+                {% if viewer_can_manage_owners %}
+                <div class="form-check">
+                    <input type="checkbox" id="role-owner" name="roles" value="owner" class="form-check-input" onchange="syncRoleCheckboxes()">
+                    <label for="role-owner" style="display: inline; font-weight: normal;">
+                        <strong>Owner</strong>
+                        <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
+                            Billing, deleting the organization, adding and removing Owners, and the audit log. Always also an Organization Admin. There must be at least one Owner.
+                        </small>
+                    </label>
+                </div>
+                {% else %}
+                <div id="roles-modal-owner-note" style="display: none; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; font-size: 0.875rem;">
+                    This person is an <strong>Owner</strong>. Only an Owner can change that. Owners are always Organization Admins.
+                </div>
+                {% endif %}
                 <div class="form-check">
                     <input type="checkbox" id="role-org-admin" name="roles" value="org_admin" class="form-check-input" onchange="syncRoleCheckboxes()">
                     <label for="role-org-admin" style="display: inline; font-weight: normal;">
@@ -331,58 +336,38 @@
     </div>
 </div>
 
-{% if viewer_is_owner %}
-<div id="transfer-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
-    <div style="background: var(--bg-card); padding: 2rem; border-radius: 12px; max-width: 500px; width: 90%;">
-        <h2 style="margin-top: 0;">Transfer ownership</h2>
-        <p style="color: var(--text-secondary);">
-            Make <strong id="transfer-modal-email"></strong> the owner. They will control billing, deleting the organization and the audit log.
-            You will stay an Organization Admin.
-        </p>
-        <form method="post" action="{% url 'transfer_ownership' %}">
-            {% csrf_token %}
-            <input type="hidden" id="transfer-modal-user-id" name="user_profile_id">
-            <div class="form-group">
-                <label for="transfer-password">Confirm with your password</label>
-                <input type="password" id="transfer-password" name="password" class="form-control" required autocomplete="current-password">
-            </div>
-            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
-                <button type="button" class="btn btn-secondary" onclick="hideModal('transfer-modal')">Cancel</button>
-                <button type="submit" class="btn btn-danger">Transfer ownership</button>
-            </div>
-        </form>
-    </div>
-</div>
-{% endif %}
 
 <script>
 function syncRoleCheckboxes() {
-    // Organization Admins can already run cycles, so the Cycle Manager option is hidden for them.
-    const isAdmin = document.getElementById('role-org-admin').checked;
+    const ownerBox = document.getElementById('role-owner');
+    const adminBox = document.getElementById('role-org-admin');
+    const ownerLocked = adminBox.dataset.ownerLocked === 'true';
+    // An Owner is always an Organization Admin.
+    const isOwner = ownerBox ? ownerBox.checked : ownerLocked;
+    if (isOwner) { adminBox.checked = true; }
+    adminBox.disabled = isOwner;
+    // Organization Admins can already run cycles, so Cycle Manager is hidden for them.
     const cmRow = document.getElementById('role-cycle-manager-row');
     const cm = document.getElementById('role-cycle-manager');
-    cmRow.style.display = isAdmin ? 'none' : '';
-    if (isAdmin) { cm.checked = false; }
+    cmRow.style.display = adminBox.checked ? 'none' : '';
+    if (adminBox.checked) { cm.checked = false; }
 }
 
-function showManageRolesModal(userId, email, isOwner, isAdmin, isCycleManager, isReportViewer) {
+function showManageRolesModal(userId, email, isSelf, isOwner, isAdmin, isCycleManager, isReportViewer) {
     document.getElementById('roles-modal-user-id').value = userId;
-    document.getElementById('roles-modal-email').textContent = email;
-    document.getElementById('roles-modal-owner-note').style.display = isOwner ? 'block' : 'none';
+    document.getElementById('roles-modal-email').textContent = isSelf ? 'you (' + email + ')' : email;
+    document.getElementById('roles-modal-self-note').style.display = isSelf ? 'block' : 'none';
+    const ownerBox = document.getElementById('role-owner');
+    const ownerNote = document.getElementById('roles-modal-owner-note');
+    if (ownerBox) { ownerBox.checked = isOwner; }
+    if (ownerNote) { ownerNote.style.display = isOwner ? 'block' : 'none'; }
     const adminBox = document.getElementById('role-org-admin');
+    adminBox.dataset.ownerLocked = isOwner ? 'true' : 'false';
     adminBox.checked = isAdmin || isOwner;
-    adminBox.disabled = isOwner;
     document.getElementById('role-cycle-manager').checked = isCycleManager;
     document.getElementById('role-report-viewer').checked = isReportViewer;
     syncRoleCheckboxes();
     document.getElementById('manage-roles-modal').style.display = 'flex';
-}
-
-function showTransferModal(userId, email) {
-    document.getElementById('transfer-modal-user-id').value = userId;
-    document.getElementById('transfer-modal-email').textContent = email;
-    document.getElementById('transfer-password').value = '';
-    document.getElementById('transfer-modal').style.display = 'flex';
 }
 
 function hideModal(id) {

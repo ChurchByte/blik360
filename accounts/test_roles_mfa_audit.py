@@ -14,10 +14,10 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from accounts.models import EmailMFACode, UserProfile
+from accounts.models import EmailMFACode, TrustedDevice, UserProfile
 from accounts.permissions import (
     CYCLE_MANAGER, ORG_ADMIN, OWNER, REPORT_VIEWER,
-    add_user_roles, get_user_roles, requires_mfa, set_user_roles, transfer_ownership,
+    add_user_roles, get_user_roles, requires_mfa, set_user_roles,
 )
 from core.audit import Actions
 from core.models import AuditLog, Organization
@@ -100,7 +100,7 @@ class RoleModelTests(OrgFixture):
     def test_permissions_per_role(self):
         matrix = {
             'owner': (self.owner, {
-                'can_manage_billing', 'can_delete_organization', 'can_transfer_ownership',
+                'can_manage_billing', 'can_delete_organization', 'can_manage_owners',
                 'can_view_audit_log', 'can_manage_organization', 'can_invite_members',
                 'can_manage_cycles'}),
             'admin': (self.admin, {'can_manage_organization', 'can_invite_members', 'can_manage_cycles'}),
@@ -109,7 +109,7 @@ class RoleModelTests(OrgFixture):
             'member': (self.member, set()),
         }
         all_perms = {
-            'can_manage_billing', 'can_delete_organization', 'can_transfer_ownership',
+            'can_manage_billing', 'can_delete_organization', 'can_manage_owners',
             'can_view_audit_log', 'can_manage_organization', 'can_invite_members',
             'can_manage_cycles', 'can_view_all_reports', 'can_investigate_responses',
         }
@@ -140,18 +140,6 @@ class RoleModelTests(OrgFixture):
     def test_unknown_role_rejected(self):
         with self.assertRaises(ValueError):
             set_user_roles(self.member, {'superhero'})
-
-    def test_transfer_ownership(self):
-        transfer_ownership(self.org, self.owner, self.report_viewer)
-        self.assertEqual(get_user_roles(self.owner), {ORG_ADMIN})
-        self.assertEqual(get_user_roles(self.report_viewer), {OWNER, ORG_ADMIN, REPORT_VIEWER})
-
-    def test_transfer_ownership_requires_same_org(self):
-        other_org = Organization.objects.create(name='Other')
-        outsider = User.objects.create_user(username='out', email='out@x.test', password='x')
-        UserProfile.objects.create(user=outsider, organization=other_org)
-        with self.assertRaises(ValueError):
-            transfer_ownership(self.org, self.owner, outsider)
 
     def test_mfa_required_for_admin_roles_and_report_viewers_only(self):
         self.assertTrue(requires_mfa(self.owner))
@@ -186,20 +174,57 @@ class TeamRoleManagementTests(OrgFixture):
         self.post_roles(self.member, ['org_admin', 'cycle_manager'])
         self.assertEqual(get_user_roles(self.member), {ORG_ADMIN})
 
-    def test_cannot_change_own_roles(self):
+    def test_admin_can_change_own_roles(self):
         self.login(self.admin)
-        self.post_roles(self.admin, ['report_viewer'])
+        self.post_roles(self.admin, ['org_admin', 'report_viewer'])
+        self.assertEqual(get_user_roles(self.admin), {ORG_ADMIN, REPORT_VIEWER})
+        entry = AuditLog.objects.get(action=Actions.ROLES_CHANGED)
+        self.assertTrue(entry.details['self_change'])
+
+    def test_admin_removing_own_admin_role_goes_to_dashboard(self):
+        self.login(self.admin)
+        response = self.post_roles(self.admin, ['cycle_manager'])
+        self.assertRedirects(response, reverse('admin_dashboard'), fetch_redirect_response=False)
+        self.assertEqual(get_user_roles(self.admin), {CYCLE_MANAGER})
+
+    def test_owner_can_add_another_owner(self):
+        self.login(self.owner)
+        self.post_roles(self.admin, ['owner'])
+        self.assertEqual(get_user_roles(self.admin), {OWNER, ORG_ADMIN})
+        self.assertEqual(get_user_roles(self.owner), {OWNER, ORG_ADMIN})
+
+    def test_owner_can_step_down_when_another_owner_exists(self):
+        set_user_roles(self.admin, {OWNER})
+        self.login(self.owner)
+        self.post_roles(self.owner, ['org_admin'])
+        self.assertEqual(get_user_roles(self.owner), {ORG_ADMIN})
+
+    def test_last_owner_cannot_remove_own_ownership(self):
+        self.login(self.owner)
+        response = self.post_roles(self.owner, ['org_admin'])
+        self.assertIn(OWNER, get_user_roles(self.owner))
+        self.assertIn('An organization needs at least one Owner. Make someone else an Owner first.',
+                      self.messages(response))
+
+    def test_owner_can_remove_another_owner(self):
+        set_user_roles(self.admin, {OWNER})
+        self.login(self.owner)
+        self.post_roles(self.admin, ['org_admin'])
         self.assertEqual(get_user_roles(self.admin), {ORG_ADMIN})
+
+    def test_org_admin_cannot_grant_or_remove_owner(self):
+        self.login(self.admin)
+        self.post_roles(self.member, ['owner', 'org_admin'])
+        self.assertEqual(get_user_roles(self.member), {ORG_ADMIN})
+        self.post_roles(self.owner, ['report_viewer'])
+        self.assertEqual(get_user_roles(self.owner), {OWNER, ORG_ADMIN, REPORT_VIEWER})
+        self.post_roles(self.admin, ['owner', 'org_admin'])
+        self.assertNotIn(OWNER, get_user_roles(self.admin))
 
     def test_owner_keeps_admin_role(self):
         self.login(self.admin)
         self.post_roles(self.owner, ['report_viewer'])
         self.assertEqual(get_user_roles(self.owner), {OWNER, ORG_ADMIN, REPORT_VIEWER})
-
-    def test_owner_role_cannot_be_granted_on_team_page(self):
-        self.login(self.admin)
-        self.post_roles(self.member, ['owner', 'org_admin'])
-        self.assertEqual(get_user_roles(self.member), {ORG_ADMIN})
 
     def test_non_admins_cannot_change_roles(self):
         for user in (self.cycle_manager, self.report_viewer, self.member):
@@ -207,37 +232,17 @@ class TeamRoleManagementTests(OrgFixture):
                 self.login(user)
                 self.post_roles(self.subject, ['report_viewer'])
                 self.assertEqual(get_user_roles(self.subject), set())
-
-    def test_transfer_ownership_view(self):
-        self.login(self.owner)
-        response = self.client.post(reverse('transfer_ownership'), {
-            'user_profile_id': self.admin.profile.id, 'password': 'pw-123456!',
-        })
-        self.assertRedirects(response, reverse('team_list'), fetch_redirect_response=False)
-        self.assertIn(OWNER, get_user_roles(self.admin))
-        self.assertNotIn(OWNER, get_user_roles(self.owner))
-        self.assertTrue(AuditLog.objects.filter(action=Actions.OWNERSHIP_TRANSFERRED).exists())
-
-    def test_transfer_ownership_needs_password(self):
-        self.login(self.owner)
-        self.client.post(reverse('transfer_ownership'), {
-            'user_profile_id': self.admin.profile.id, 'password': 'wrong',
-        })
-        self.assertIn(OWNER, get_user_roles(self.owner))
-
-    def test_only_owner_can_transfer(self):
-        self.login(self.admin)
-        self.client.post(reverse('transfer_ownership'), {
-            'user_profile_id': self.member.profile.id, 'password': 'pw-123456!',
-        })
-        self.assertNotIn(OWNER, get_user_roles(self.member))
+                self.post_roles(user, ['org_admin'])
+                self.assertNotIn(ORG_ADMIN, get_user_roles(user))
 
     def test_team_page_renders_roles(self):
         self.login(self.owner)
         response = self.client.get(reverse('team_list'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Report Viewer')
-        self.assertContains(response, 'Make owner')
+        self.assertContains(response, 'id="role-owner"')
+        self.login(self.admin)
+        self.assertNotContains(self.client.get(reverse('team_list')), 'id="role-owner"')
 
 
 # ---------------------------------------------------------------------------
@@ -370,18 +375,16 @@ class OrganizationDataTests(OrgFixture):
         self.assertIsNone(entry.organization)
         self.assertEqual(entry.organization_name, 'Empty Org')
 
-    def test_superuser_is_not_treated_as_owner_for_transfer(self):
-        root = User.objects.create_superuser('root', 'root@kings.test', 'pw-123456!')
-        self.login(root)
-        self.client.post(reverse('transfer_ownership'), {
-            'user_profile_id': self.member.profile.id, 'password': 'pw-123456!',
-        })
-        self.assertNotIn(OWNER, get_user_roles(self.member))
-
-    def test_owner_cannot_delete_own_account_without_transfer(self):
+    def test_only_owner_cannot_delete_own_account(self):
         self.login(self.owner)
         self.client.post(reverse('account:delete_account'), {'password': 'pw-123456!'})
         self.assertTrue(User.objects.filter(pk=self.owner.pk).exists())
+
+    def test_owner_can_delete_account_when_another_owner_exists(self):
+        set_user_roles(self.admin, {OWNER})
+        self.login(self.owner)
+        self.client.post(reverse('account:delete_account'), {'password': 'pw-123456!'})
+        self.assertFalse(User.objects.filter(pk=self.owner.pk).exists())
 
     def test_settings_change_is_audited_without_password(self):
         self.login(self.admin)
@@ -595,6 +598,80 @@ class MFATests(OrgFixture):
             'code': self.latest_code(), 'next': 'https://evil.example/',
         })
         self.assertEqual(response['Location'], reverse('admin_dashboard'))
+
+    def relogin(self, user):
+        """Sign out and back in on the same browser (Client.logout drops all cookies)."""
+        device_cookie = self.client.cookies.get('blik_mfa_device')
+        self.client.logout()
+        if device_cookie is not None:
+            self.client.cookies['blik_mfa_device'] = device_cookie.value
+        self.login(user)
+
+    def verify(self, user, remember):
+        self.login(user)
+        self.client.get(reverse('mfa_verify'))
+        data = {'code': self.latest_code()}
+        if remember:
+            data['remember'] = 'on'
+        return self.client.post(reverse('mfa_verify'), data)
+
+    def test_remembered_device_skips_code_for_30_days(self):
+        response = self.verify(self.admin, remember=True)
+        cookie = response.cookies['blik_mfa_device']
+        self.assertTrue(cookie['httponly'])
+        self.assertEqual(cookie['max-age'], 30 * 24 * 3600)
+        device = TrustedDevice.objects.get(user=self.admin)
+        self.assertAlmostEqual((device.expires_at - timezone.now()).days, 29, delta=1)
+        self.assertNotIn(cookie.value, device.token_hash)
+
+        self.relogin(self.admin)
+        self.assertEqual(self.client.get(reverse('team_list')).status_code, 200)
+        self.assertTrue(AuditLog.objects.filter(action=Actions.MFA_REMEMBERED_DEVICE).exists())
+
+    def test_without_remember_code_is_needed_again(self):
+        self.verify(self.admin, remember=False)
+        self.assertFalse(TrustedDevice.objects.exists())
+        self.relogin(self.admin)
+        self.assertEqual(self.client.get(reverse('team_list')).status_code, 302)
+
+    def test_expired_device_needs_code(self):
+        self.verify(self.admin, remember=True)
+        TrustedDevice.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+        self.relogin(self.admin)
+        self.assertEqual(self.client.get(reverse('team_list')).status_code, 302)
+
+    def test_forget_devices(self):
+        self.verify(self.admin, remember=True)
+        response = self.client.post(reverse('mfa_forget_devices'))
+        self.assertFalse(TrustedDevice.objects.filter(user=self.admin).exists())
+        self.assertEqual(response.cookies['blik_mfa_device'].value, '')
+        self.assertTrue(AuditLog.objects.filter(action=Actions.MFA_DEVICES_FORGOTTEN).exists())
+
+    def test_forgotten_device_needs_code_again(self):
+        self.verify(self.admin, remember=True)
+        TrustedDevice.objects.all().delete()
+        self.relogin(self.admin)
+        self.assertEqual(self.client.get(reverse('team_list')).status_code, 302)
+
+    def test_device_cookie_only_works_for_its_user(self):
+        self.verify(self.admin, remember=True)
+        self.relogin(self.report_viewer)
+        self.assertEqual(self.client.get(reverse('admin_dashboard')).status_code, 302)
+
+    def test_password_reset_forgets_devices(self):
+        from accounts.models import PasswordResetToken
+        self.verify(self.admin, remember=True)
+        self.client.logout()
+        token = PasswordResetToken.objects.create(user=self.admin)
+        self.client.post(reverse('reset_password', args=[token.token]), {
+            'password1': 'N3w-passw0rd!x', 'password2': 'N3w-passw0rd!x',
+        })
+        self.assertFalse(TrustedDevice.objects.filter(user=self.admin).exists())
+
+    def test_profile_shows_remembered_devices(self):
+        self.verify(self.admin, remember=True)
+        response = self.client.get(reverse('profile'))
+        self.assertContains(response, 'Forget remembered devices')
 
     @override_settings(MFA_REQUIRED=False)
     def test_can_be_switched_off(self):

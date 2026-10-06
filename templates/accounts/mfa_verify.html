@@ -28,6 +28,13 @@
                    maxlength="7" required autofocus>
             <small class="help-text">The code expires after {{ minutes }} minutes.</small>
         </div>
+        <div class="form-group" style="display: flex; align-items: flex-start; gap: 0.5rem;">
+            <input type="checkbox" name="remember" id="id_remember" style="margin-top: 0.3rem;">
+            <label for="id_remember" style="font-weight: normal;">
+                Remember this device for {{ remember_days }} days
+                <small class="help-text" style="display: block;">Only tick this on a computer or phone that only you use.</small>
+            </label>
+        </div>
         <button type="submit" class="btn-primary">Verify</button>
     </form>
 

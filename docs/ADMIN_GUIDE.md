@@ -87,7 +87,7 @@ Everyone in an organization is a **Member**. Extra roles are assigned on the
 
 | Role | What it adds |
 |---|---|
-| **Owner** (one per organization) | Billing, deleting the organization, transferring ownership, the **Audit Log**. Always also an Organization Admin. |
+| **Owner** (one or more per organization) | Billing, deleting the organization, adding and removing Owners, the **Audit Log**. Always also an Organization Admin. |
 | **Organization Admin** | Settings, team and roles, invitations, reviewees, API tokens and webhooks, GDPR deletions, and running review cycles for anyone. **No access to report content.** |
 | **Cycle Manager** | Creates and runs review cycles for anyone and sees completion progress, but **not results**. |
 | **Report Viewer** (HR only) | Reads every report. For a formal investigation, can see which invited reviewer gave which answers. |
@@ -101,10 +101,12 @@ Everyone in an organization is a **Member**. Extra roles are assigned on the
 | Full data export | Only if also Report Viewer | No | No | No |
 | Sign-in code by email (MFA) | Required | — | Required | — |
 
-**Ownership.** Whoever set up the instance (or signed up) is the Owner. The
-Owner can hand the role to another member with **Make owner** on the Team page;
-they stay an Organization Admin. The Owner can't delete their own account until
-ownership has been transferred.
+**Changing roles.** Owners and Organization Admins change roles with **Manage
+roles** on the Team page, including their own. Only Owners can make someone an
+Owner or remove the Owner role. Whoever set up the instance (or signed up) is
+the first Owner; an organization can have several, but always at least one, so
+the last Owner can't remove their own Owner role or delete their account until
+someone else is an Owner. Every role change is recorded in the audit log.
 
 **Report Viewers and reviewer identities.** Reviewers invited by email are linked
 to their answers through their invitation. A Report Viewer can open **Investigation:
@@ -115,7 +117,10 @@ link cannot be identified. A Report Viewer cannot investigate feedback about
 themselves. Reviewers are told all of this on the feedback form.
 
 **MFA.** Owners, Organization Admins and Report Viewers get a 6-digit code by
-email after signing in (it expires after 10 minutes). Email delivery must work
+email after signing in (it expires after 10 minutes). Ticking **Remember this
+device for 30 days** skips the code on that browser until it expires. People can
+clear their remembered devices from their **Profile** page, and a password reset
+clears them automatically. Email delivery must work
 for these people to sign in. In an emergency set `MFA_REQUIRED=False` in the
 environment and restart, then switch it back on.
 

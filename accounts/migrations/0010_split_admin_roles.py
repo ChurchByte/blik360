@@ -19,7 +19,7 @@ from django.db import migrations
 PERMISSION_NAMES = {
     'can_manage_billing': 'Can manage billing and subscription',
     'can_delete_organization': 'Can delete organization',
-    'can_transfer_ownership': 'Can transfer organization ownership',
+    'can_manage_owners': 'Can add and remove owners',
     'can_view_audit_log': 'Can view the audit log',
     'can_invite_members': 'Can invite team members',
     'can_manage_organization': 'Can manage organization settings',
@@ -31,7 +31,7 @@ PERMISSION_NAMES = {
 GROUP_PERMISSIONS = {
     'Organization Owner': [
         'can_manage_billing', 'can_delete_organization',
-        'can_transfer_ownership', 'can_view_audit_log',
+        'can_manage_owners', 'can_view_audit_log',
     ],
     'Organization Admin': ['can_manage_organization', 'can_invite_members', 'can_manage_cycles'],
     'Cycle Manager': ['can_manage_cycles'],

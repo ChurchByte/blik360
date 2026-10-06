@@ -9,6 +9,7 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(next_page='login'), name='logout'),
     path('mfa/verify/', views.mfa_verify, name='mfa_verify'),
     path('mfa/resend/', views.mfa_resend, name='mfa_resend'),
+    path('mfa/forget-devices/', views.forget_devices_view, name='mfa_forget_devices'),
     path('profile/', views.profile_view, name='profile'),
     path('forgot-password/', views.forgot_password_view, name='forgot_password'),
     path('reset-password/<str:token>/', views.reset_password_view, name='reset_password'),

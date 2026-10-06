@@ -10,17 +10,25 @@ invitation signup, setup wizard, Stripe auto-login, Django admin) is covered.
 Codes are random, stored only as a keyed hash, expire after
 MFA_CODE_TTL_MINUTES, allow MFA_MAX_ATTEMPTS guesses, and a new code
 invalidates the previous one. Sending is throttled per user.
+
+After a successful code the user can tick "Remember this device"; the
+browser then gets a signed cookie for MFA_REMEMBER_DAYS and isn't asked for
+a code there until it expires or the device is forgotten (from the profile
+page, or automatically on a password reset).
 """
+import hashlib
 import hmac
 import logging
 import secrets
 from datetime import timedelta
 
+from django.core import signing
+
 from django.conf import settings
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
 
-from accounts.models import EmailMFACode
+from accounts.models import EmailMFACode, TrustedDevice
 from accounts.permissions import requires_mfa
 
 logger = logging.getLogger(__name__)
@@ -31,6 +39,9 @@ CODE_TTL_MINUTES = getattr(settings, 'MFA_CODE_TTL_MINUTES', 10)
 MAX_ATTEMPTS = getattr(settings, 'MFA_MAX_ATTEMPTS', 5)
 RESEND_COOLDOWN_SECONDS = getattr(settings, 'MFA_RESEND_COOLDOWN_SECONDS', 30)
 MAX_CODES_PER_HOUR = getattr(settings, 'MFA_MAX_CODES_PER_HOUR', 6)
+
+DEVICE_COOKIE = 'blik_mfa_device'
+DEVICE_COOKIE_SALT = 'blik.accounts.mfa.device'
 
 
 def mfa_enabled():
@@ -143,3 +154,67 @@ def _send_code_email(user, code):
         recipient_list=[user.email],
         html_message=render_to_string('emails/mfa_code.html', context),
     )
+
+
+# ---------------------------------------------------------------------------
+# Remembered devices
+# ---------------------------------------------------------------------------
+
+def remember_days():
+    return getattr(settings, 'MFA_REMEMBER_DAYS', 30)
+
+
+def _token_hash(raw):
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def remember_device(request, response):
+    """Trust this browser for remember_days() and set the cookie on `response`."""
+    from core.audit import client_ip
+
+    raw = secrets.token_urlsafe(32)
+    days = remember_days()
+    TrustedDevice.objects.create(
+        user=request.user,
+        token_hash=_token_hash(raw),
+        expires_at=timezone.now() + timedelta(days=days),
+        user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],
+        ip_address=client_ip(request),
+    )
+    value = signing.dumps({'u': request.user.pk, 't': raw}, salt=DEVICE_COOKIE_SALT)
+    response.set_cookie(
+        DEVICE_COOKIE, value,
+        max_age=days * 24 * 3600,
+        secure=getattr(settings, 'SESSION_COOKIE_SECURE', True),
+        httponly=True,
+        samesite='Lax',
+    )
+    return response
+
+
+def trusted_device_for(request):
+    """The TrustedDevice matching this browser's cookie for request.user, or None."""
+    value = request.COOKIES.get(DEVICE_COOKIE)
+    if not value or not request.user.is_authenticated:
+        return None
+    try:
+        data = signing.loads(value, salt=DEVICE_COOKIE_SALT, max_age=remember_days() * 24 * 3600)
+    except signing.BadSignature:
+        return None
+    if data.get('u') != request.user.pk or not data.get('t'):
+        return None
+    return TrustedDevice.objects.filter(
+        user=request.user,
+        token_hash=_token_hash(data['t']),
+        expires_at__gt=timezone.now(),
+    ).first()
+
+
+def forget_devices(user):
+    """Revoke every remembered device for the user. Returns how many."""
+    count, _ = TrustedDevice.objects.filter(user=user).delete()
+    return count
+
+
+def active_device_count(user):
+    return TrustedDevice.objects.filter(user=user, expires_at__gt=timezone.now()).count()

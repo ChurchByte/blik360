@@ -193,7 +193,7 @@ def team_list(request):
         'invitations': invitations,
         'subscription_status': subscription_status,
         'per_page': per_page,
-        'viewer_is_owner': OWNER in get_user_roles(request.user),
+        'viewer_can_manage_owners': request.user.has_perm('accounts.can_manage_owners'),
     }
 
     return render(request, 'admin_dashboard/team.html', context)
@@ -201,50 +201,15 @@ def team_list(request):
 
 @login_required
 @require_POST
-def transfer_ownership_view(request):
-    """Owner hands the Owner role to another member (stays an Org Admin)."""
-    from accounts.permissions import transfer_ownership, get_user_roles, OWNER
-
-    # Check the role itself, not the permission: superusers hold every
-    # permission but are not the owner.
-    if OWNER not in get_user_roles(request.user):
-        messages.error(request, 'Only the organization owner can transfer ownership.')
-        return redirect('team_list')
-
-    org = request.organization
-    target_profile = get_object_or_404(
-        UserProfile.objects.select_related('user'),
-        id=request.POST.get('user_profile_id'),
-        organization=org,
-    )
-    if not request.user.check_password(request.POST.get('password', '')):
-        messages.error(request, 'Incorrect password. Ownership was not transferred.')
-        return redirect('team_list')
-
-    try:
-        transfer_ownership(org, request.user, target_profile.user)
-    except ValueError as e:
-        messages.error(request, str(e))
-        return redirect('team_list')
-
-    log_event(
-        request, Actions.OWNERSHIP_TRANSFERRED,
-        target=target_profile.user, target_label=target_profile.user.email,
-        details={'from': request.user.email, 'to': target_profile.user.email},
-    )
-    messages.success(
-        request,
-        f'{target_profile.user.email} is now the owner of {org.name}. You remain an Organization Admin.'
-    )
-    return redirect('team_list')
-
-
-@login_required
-@require_POST
 def update_user_permissions(request):
-    """Change a team member's roles (Organization Admin, Cycle Manager, Report Viewer)."""
+    """
+    Change a team member's roles. Owners and Organization Admins can change
+    anyone's roles, including their own. Only Owners can add or remove Owners,
+    and the organization always keeps at least one Owner.
+    """
     from accounts.permissions import (
-        get_user_roles, set_user_roles, role_labels, ASSIGNABLE_ROLES,
+        get_user_roles, set_user_roles, role_labels, count_owners, can_manage_owners,
+        ASSIGNABLE_ROLES, OWNER_ASSIGNABLE_ROLES,
         OWNER, ORG_ADMIN, CYCLE_MANAGER, REPORT_VIEWER,
     )
 
@@ -264,48 +229,63 @@ def update_user_permissions(request):
 
     user_profile = get_object_or_404(UserProfile, id=user_profile_id, organization=org)
     target_user = user_profile.user
+    is_self = target_user.id == request.user.id
 
-    if target_user.id == request.user.id:
-        messages.error(request, 'You cannot change your own roles. Ask another administrator.')
-        return redirect('team_list')
-
-    if target_user.is_superuser:
+    if target_user.is_superuser and not is_self:
         messages.error(request, 'Cannot modify roles for super admins.')
         return redirect('team_list')
 
+    may_manage_owners = can_manage_owners(request.user)
+    allowed = OWNER_ASSIGNABLE_ROLES if may_manage_owners else ASSIGNABLE_ROLES
+    posted = set(request.POST.getlist('roles'))
     current = get_user_roles(target_user)
-    requested = {r for r in request.POST.getlist('roles') if r in ASSIGNABLE_ROLES}
+    requested = {r for r in posted if r in allowed}
 
-    # Organization Admins can already run cycles, so the separate Cycle
-    # Manager role is ignored for them.
+    # Organization Admins can't add or remove Owners.
+    if not may_manage_owners and OWNER in current:
+        requested.add(OWNER)
+
+    # An Owner is always an Organization Admin, and Organization Admins can
+    # already run cycles, so the separate Cycle Manager role is dropped for them.
+    if OWNER in requested:
+        requested.add(ORG_ADMIN)
     if ORG_ADMIN in requested:
         requested.discard(CYCLE_MANAGER)
 
-    # Ownership only changes through a transfer, and an owner is always an admin.
-    if OWNER in current:
-        requested |= {OWNER, ORG_ADMIN}
+    if OWNER in current and OWNER not in requested and count_owners(org) <= 1:
+        messages.error(
+            request,
+            'An organization needs at least one Owner. Make someone else an Owner first.'
+        )
+        return redirect('team_list')
 
     old_roles, new_roles = set_user_roles(target_user, requested)
 
-    if old_roles != new_roles:
-        added = sorted(new_roles - old_roles)
-        removed = sorted(old_roles - new_roles)
-        log_event(
-            request, Actions.ROLES_CHANGED,
-            target=target_user, target_label=target_user.email,
-            details={'added': added, 'removed': removed, 'roles': sorted(new_roles)},
-        )
-        labels = ', '.join(role_labels(new_roles)) or 'Member'
-        messages.success(request, f'{target_user.email} now has: {labels}.')
-        if REPORT_VIEWER in added:
-            messages.info(
-                request,
-                f'{target_user.email} can now read every report and, for investigations, see which '
-                'reviewer gave which answers. They will need to verify a code by email at their next sign-in.'
-            )
-    else:
+    if old_roles == new_roles:
         messages.info(request, 'No changes made.')
+        return redirect('team_list')
 
+    added = sorted(new_roles - old_roles)
+    removed = sorted(old_roles - new_roles)
+    log_event(
+        request, Actions.ROLES_CHANGED,
+        target=target_user, target_label=target_user.email,
+        details={'added': added, 'removed': removed, 'roles': sorted(new_roles),
+                 'self_change': is_self},
+    )
+    labels = ', '.join(role_labels(new_roles)) or 'Member'
+    who = 'You now have' if is_self else f'{target_user.email} now has'
+    messages.success(request, f'{who}: {labels}.')
+    if REPORT_VIEWER in added:
+        messages.info(
+            request,
+            ('You' if is_self else target_user.email) + ' can now read every report and, for '
+            'investigations, see which reviewer gave which answers.'
+        )
+
+    if is_self and ORG_ADMIN not in new_roles:
+        # They can no longer manage the team.
+        return redirect('admin_dashboard')
     return redirect('team_list')
 
 
@@ -2312,6 +2292,7 @@ def settings_view(request):
     print(f"DEBUG: Passing subscription to template: {subscription}")
 
     # Check if current user has organization admin permission
+    from accounts.permissions import is_last_owner
     is_org_admin = request.user.has_perm('accounts.can_manage_organization')
 
     # Count total admin users
@@ -2334,6 +2315,7 @@ def settings_view(request):
         'is_org_admin': is_org_admin,
         'admin_count': admin_count,
         'is_last_admin': is_org_admin and admin_count == 1,
+        'is_last_owner': is_last_owner(request.user),
         'api_tokens': api_tokens,
         'webhooks': webhooks,
         'new_token': new_token,

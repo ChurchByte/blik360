@@ -11,6 +11,7 @@ from accounts.models import UserProfile, OrganizationInvitation, PasswordResetTo
 from accounts.services import create_user_with_email_as_username
 from accounts.forms import ForgotPasswordForm, ResetPasswordForm
 from accounts.permissions import get_user_roles, role_labels
+from accounts import mfa
 
 
 @require_http_methods(["GET", "POST"])
@@ -242,6 +243,10 @@ def reset_password_view(request, token):
             user.set_password(form.cleaned_data['password1'])
             user.save()
 
+            # A new password should also stop remembered devices skipping MFA.
+            from accounts.mfa import forget_devices
+            forget_devices(user)
+
             # Mark token as used
             reset_token.used_at = timezone.now()
             reset_token.save()
@@ -319,6 +324,8 @@ def profile_view(request):
         'form': form,
         'cycles_with_reports': cycles_with_reports,
         'role_labels': role_labels(get_user_roles(request.user)),
+        'mfa_required': mfa.user_needs_mfa(request.user),
+        'remembered_devices': mfa.active_device_count(request.user),
     }
     return render(request, 'accounts/profile.html', context)
 
@@ -353,7 +360,12 @@ def mfa_verify(request):
         if ok:
             mfa.mark_verified(request)
             log_event(request, Actions.MFA_VERIFIED)
-            return redirect(_safe_next(request))
+            response = redirect(_safe_next(request))
+            if request.POST.get('remember') == 'on':
+                mfa.remember_device(request, response)
+                log_event(request, Actions.MFA_DEVICE_REMEMBERED,
+                          details={'days': mfa.remember_days()})
+            return response
         log_event(request, Actions.MFA_FAILED, details={'reason': error})
         messages.error(request, error)
     elif mfa.active_code(request.user) is None:
@@ -368,6 +380,7 @@ def mfa_verify(request):
         'email': request.user.email,
         'next': request.POST.get('next') or request.GET.get('next', ''),
         'minutes': mfa.CODE_TTL_MINUTES,
+        'remember_days': mfa.remember_days(),
     })
 
 
@@ -394,3 +407,21 @@ def mfa_resend(request):
     if nxt:
         url += '?' + urlencode({'next': nxt})
     return redirect(url)
+
+
+@login_required
+@require_http_methods(["POST"])
+def forget_devices_view(request):
+    """Stop remembering every browser for this user's sign-in code."""
+    from accounts import mfa
+    from core.audit import log_event, Actions
+
+    count = mfa.forget_devices(request.user)
+    log_event(request, Actions.MFA_DEVICES_FORGOTTEN, details={'count': count})
+    messages.success(
+        request,
+        'Done. You will be asked for a sign-in code on every device next time you sign in.'
+    )
+    response = redirect('profile')
+    response.delete_cookie(mfa.DEVICE_COOKIE, samesite='Lax')
+    return response

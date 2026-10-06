@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AlterModelOptions(
             name='userprofile',
-            options={'ordering': ['user__username'], 'permissions': [('can_manage_billing', 'Can manage billing and subscription'), ('can_delete_organization', 'Can delete organization'), ('can_transfer_ownership', 'Can transfer organization ownership'), ('can_view_audit_log', 'Can view the audit log'), ('can_invite_members', 'Can invite team members'), ('can_manage_organization', 'Can manage organization settings'), ('can_manage_cycles', 'Can create and run review cycles for others'), ('can_view_all_reports', 'Can view all organization reports'), ('can_investigate_responses', 'Can view reviewer identities for investigations')]},
+            options={'ordering': ['user__username'], 'permissions': [('can_manage_billing', 'Can manage billing and subscription'), ('can_delete_organization', 'Can delete organization'), ('can_manage_owners', 'Can add and remove owners'), ('can_view_audit_log', 'Can view the audit log'), ('can_invite_members', 'Can invite team members'), ('can_manage_organization', 'Can manage organization settings'), ('can_manage_cycles', 'Can create and run review cycles for others'), ('can_view_all_reports', 'Can view all organization reports'), ('can_investigate_responses', 'Can view reviewer identities for investigations')]},
         ),
         migrations.AlterField(
             model_name='userprofile',
