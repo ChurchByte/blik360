@@ -18,6 +18,7 @@
             </div>
         </div>
         <div style="display: flex; gap: 0.5rem;">
+            {% if question.section.questionnaire.dreyfus_enabled %}
             <button
                 type="button"
                 class="btn btn-sm btn-secondary"
@@ -25,6 +26,7 @@
                 title="Configure Dreyfus/Agency weights and action items"
                 style="background: var(--primary); border-color: var(--primary); color: white;"
             >Dreyfus/Agency</button>
+            {% endif %}
             <button
                 type="button"
                 class="btn btn-sm btn-secondary edit-question-btn"

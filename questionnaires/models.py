@@ -26,6 +26,11 @@ class Questionnaire(TimeStampedModel):
     description = models.TextField(blank=True)
     is_default = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    dreyfus_enabled = models.BooleanField(
+        default=True,
+        help_text="Show Dreyfus (Skill + Agency) configuration in the builder and "
+                  "Dreyfus profile sections in generated reports"
+    )
 
     objects = QuestionnaireManager()
 
@@ -46,6 +51,9 @@ class Questionnaire(TimeStampedModel):
         """
         has_skill = False
         has_agency = False
+
+        if not self.dreyfus_enabled:
+            return has_skill, has_agency
 
         for section in self.sections.all():
             for question in section.questions.all():

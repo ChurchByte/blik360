@@ -775,6 +775,7 @@ def questionnaire_create(request):
         name = request.POST.get('name')
         description = request.POST.get('description', '')
         is_default = request.POST.get('is_default') == 'on'
+        dreyfus_enabled = request.POST.get('dreyfus_enabled') == 'on'
 
         if not name:
             messages.error(request, 'Questionnaire name is required.')
@@ -788,6 +789,7 @@ def questionnaire_create(request):
                 name=name,
                 description=description,
                 is_default=is_default,
+                dreyfus_enabled=dreyfus_enabled,
                 organization=org
             )
             messages.success(request, f'Questionnaire "{questionnaire.name}" created successfully.')
@@ -824,6 +826,7 @@ def questionnaire_edit(request, questionnaire_id):
             questionnaire.name = request.POST.get('name', questionnaire.name)
             questionnaire.description = request.POST.get('description', '')
             questionnaire.is_default = request.POST.get('is_default') == 'on'
+            questionnaire.dreyfus_enabled = request.POST.get('dreyfus_enabled') == 'on'
 
             try:
                 questionnaire.save()
