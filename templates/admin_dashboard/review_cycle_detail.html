@@ -10,6 +10,8 @@
                 {{ cycle.reviewee.name }}
                 {% if cycle.status == 'active' %}
                 <span class="badge badge-warning">Active</span>
+                {% elif cycle.status == 'archived' %}
+                <span class="badge badge-secondary">Archived</span>
                 {% else %}
                 <span class="badge badge-success">Completed</span>
                 {% endif %}
@@ -18,6 +20,9 @@
                 <strong>Questionnaire:</strong> {{ cycle.questionnaire.name }}
             </p>
             <p style="color: #64748b; margin-bottom: 0.25rem;">Created on {{ cycle.created_at|date:"F d, Y" }}</p>
+            {% if cycle.status == 'archived' %}
+            <p style="color: #64748b; margin-bottom: 0.25rem;">Archived on {{ cycle.archived_at|date:"F d, Y" }}{% if cycle.status_before_archive %} (was {{ cycle.status_before_archive }}){% endif %}. Feedback links are disabled.</p>
+            {% endif %}
             <details style="margin-top: 0.5rem;">
                 <summary style="cursor: pointer; color: #64748b; font-size: 0.875rem; user-select: none; display: inline-flex; align-items: center; gap: 0.25rem;">
                     <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
@@ -45,7 +50,7 @@
     </div>
 </div>
 
-{% if cycle.status == 'completed' %}
+{% if cycle.was_completed %}
 <!-- Report Section (Prominent for completed cycles) -->
 {% if report_exists %}
 <div class="card" style="margin-bottom: 2rem; border: 2px solid var(--success);">
@@ -540,21 +545,50 @@ document.addEventListener('DOMContentLoaded', function() {
                     Close Cycle & Generate Report
                 </button>
             </form>
+
+            {% if perms.accounts.can_manage_organization %}
+            <form method="post" action="{% url 'archive_cycle' cycle.uuid %}" style="margin: 0;"
+                  onsubmit="return confirm('Archive this cycle? Feedback links will stop working and no report will be generated. You can restore it later.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-secondary" style="width: 100%;">
+                    Archive Cycle
+                </button>
+            </form>
+            {% endif %}
         </div>
     </div>
 </div>
 {% else %}
-<!-- Additional Actions for Completed Cycles -->
-{% if user.is_superuser %}
+<!-- Additional Actions for Completed / Archived Cycles -->
+{% if perms.accounts.can_manage_organization or user.is_superuser %}
 <div class="card">
     <div class="card-header">
         <h2 class="card-title">Additional Actions</h2>
     </div>
     <div class="card-body">
         <div class="action-grid">
+            {% if not perms.accounts.can_manage_organization %}
+            {% elif cycle.status == 'archived' %}
+            <form method="post" action="{% url 'unarchive_cycle' cycle.uuid %}" style="margin: 0;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    Restore Cycle
+                </button>
+            </form>
+            {% else %}
+            <form method="post" action="{% url 'archive_cycle' cycle.uuid %}" style="margin: 0;"
+                  onsubmit="return confirm('Archive this cycle? It will be hidden from the cycle list. You can restore it later.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-secondary" style="width: 100%;">
+                    Archive Cycle
+                </button>
+            </form>
+            {% endif %}
+            {% if user.is_superuser %}
             <a href="/admin/reviews/reviewcycle/{{ cycle.id }}/change/" class="btn btn-secondary">
                 Edit in Django Admin
             </a>
+            {% endif %}
         </div>
     </div>
 </div>

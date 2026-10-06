@@ -1239,6 +1239,13 @@ def review_cycle_list(request):
 
     cycles_qs = visible_cycles(request.user, cycles_qs)
 
+    show_archived = request.GET.get('archived') == '1'
+    archived_count = cycles_qs.filter(status='archived').count()
+    if show_archived:
+        cycles_qs = cycles_qs.filter(status='archived')
+    else:
+        cycles_qs = cycles_qs.exclude(status='archived')
+
     cycles_qs = cycles_qs.prefetch_related(
         'questionnaire__sections__questions'
     ).annotate(
@@ -1282,6 +1289,8 @@ def review_cycle_list(request):
         'cycles': cycles,  # Paginated object
         'questionnaires': questionnaires,
         'per_page': per_page,
+        'show_archived': show_archived,
+        'archived_count': archived_count,
     }
 
     return render(request, 'admin_dashboard/review_cycle_list.html', context)
@@ -1602,7 +1611,7 @@ def close_cycle(request, cycle_uuid):
     cycle = get_cycle_or_404(request, cycle_uuid)
 
     if cycle.status != 'active':
-        messages.warning(request, 'This cycle is already completed.')
+        messages.warning(request, f'This cycle is already {cycle.get_status_display().lower()}.')
         return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
 
     # Check if there are any completed reviews
@@ -1639,6 +1648,44 @@ def close_cycle(request, cycle_uuid):
         messages.error(request, f'Cycle closed but error generating report: {str(e)}')
 
     return redirect('review_cycle_detail', cycle_uuid=cycle_uuid)
+
+
+@login_required
+@require_POST
+def archive_cycle(request, cycle_uuid):
+    """Archive a cycle in any state. Stops further feedback; keeps all data."""
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to archive cycles.')
+        return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+    if cycle.is_archived:
+        messages.info(request, 'This cycle is already archived.')
+    else:
+        cycle.archive()
+        messages.success(request, f'Cycle for {cycle.reviewee.name} archived. Feedback links no longer work.')
+
+    return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+
+@login_required
+@require_POST
+def unarchive_cycle(request, cycle_uuid):
+    """Restore an archived cycle to its previous status."""
+    cycle = get_cycle_or_404(request, cycle_uuid)
+
+    if not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to restore cycles.')
+        return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
+
+    if not cycle.is_archived:
+        messages.info(request, 'This cycle is not archived.')
+    else:
+        cycle.unarchive()
+        messages.success(request, f'Cycle restored ({cycle.get_status_display()}).')
+
+    return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
 
 
 @login_required

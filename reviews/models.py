@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth.models import User
 from core.models import TimeStampedModel
 from core.managers import ReviewCycleManager, ReviewerTokenManager, ResponseManager
@@ -13,6 +14,7 @@ class ReviewCycle(TimeStampedModel):
     STATUS_CHOICES = [
         ('active', 'Active'),
         ('completed', 'Completed'),
+        ('archived', 'Archived'),
     ]
 
     # Public UUID for external references (API, URLs)
@@ -46,6 +48,46 @@ class ReviewCycle(TimeStampedModel):
         blank=True,
         help_text="When the close check-in email was sent to the reviewee"
     )
+    archived_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the cycle was archived"
+    )
+    status_before_archive = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        help_text="Status the cycle had before it was archived (restored on unarchive)"
+    )
+
+    @property
+    def is_archived(self):
+        return self.status == 'archived'
+
+    @property
+    def was_completed(self):
+        """True if the cycle is completed, or was completed before being archived."""
+        return self.status == 'completed' or (
+            self.status == 'archived' and self.status_before_archive == 'completed'
+        )
+
+    def archive(self):
+        """Archive the cycle from any status. Feedback links stop working; nothing is deleted."""
+        if self.status == 'archived':
+            return
+        self.status_before_archive = self.status
+        self.status = 'archived'
+        self.archived_at = timezone.now()
+        self.save(update_fields=['status', 'status_before_archive', 'archived_at', 'updated_at'])
+
+    def unarchive(self):
+        """Restore an archived cycle to the status it had before archiving."""
+        if self.status != 'archived':
+            return
+        self.status = self.status_before_archive or 'active'
+        self.status_before_archive = ''
+        self.archived_at = None
+        self.save(update_fields=['status', 'status_before_archive', 'archived_at', 'updated_at'])
 
     @property
     def organization(self):

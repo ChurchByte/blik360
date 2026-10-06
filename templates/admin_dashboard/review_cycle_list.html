@@ -8,8 +8,19 @@
         <h1>Review Cycles</h1>
         <p>Manage 360-degree feedback review cycles</p>
     </div>
-    <a href="{% url 'review_cycle_create' %}" class="btn btn-primary">Create Review Cycle</a>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+        {% if show_archived %}
+        <a href="{% url 'review_cycle_list' %}" class="btn btn-secondary">Back to Current Cycles</a>
+        {% elif archived_count %}
+        <a href="?archived=1" class="btn btn-secondary">Archived ({{ archived_count }})</a>
+        {% endif %}
+        <a href="{% url 'review_cycle_create' %}" class="btn btn-primary">Create Review Cycle</a>
+    </div>
 </div>
+
+{% if show_archived %}
+<p style="color: var(--text-secondary); margin-bottom: 1rem;">Showing archived cycles. Open a cycle to restore it.</p>
+{% endif %}
 
 {% if cycles_with_latest %}
 <div class="card">
@@ -43,6 +54,8 @@
                     <td>
                         {% if item.cycle.status == 'active' %}
                         <span class="badge badge-warning">Active</span>
+                        {% elif item.cycle.status == 'archived' %}
+                        <span class="badge badge-secondary">Archived</span>
                         {% else %}
                         <span class="badge badge-success">Completed</span>
                         {% endif %}
@@ -160,7 +173,7 @@
     <div class="card-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="color: var(--text-secondary); font-size: 0.875rem;">Items per page:</span>
-            <select onchange="window.location.href='?per_page=' + this.value" style="padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary);">
+            <select onchange="window.location.href='?{% if show_archived %}archived=1&{% endif %}per_page=' + this.value" style="padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary);">
                 <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
@@ -168,8 +181,8 @@
         </div>
         <div class="pagination">
             {% if cycles.has_previous %}
-                <a href="?page=1&per_page={{ per_page }}" class="pagination-link">First</a>
-                <a href="?page={{ cycles.previous_page_number }}&per_page={{ per_page }}" class="pagination-link">Previous</a>
+                <a href="?page=1&{% if show_archived %}archived=1&{% endif %}per_page={{ per_page }}" class="pagination-link">First</a>
+                <a href="?page={{ cycles.previous_page_number }}&{% if show_archived %}archived=1&{% endif %}per_page={{ per_page }}" class="pagination-link">Previous</a>
             {% endif %}
 
             <span class="pagination-info">
@@ -177,8 +190,8 @@
             </span>
 
             {% if cycles.has_next %}
-                <a href="?page={{ cycles.next_page_number }}&per_page={{ per_page }}" class="pagination-link">Next</a>
-                <a href="?page={{ cycles.paginator.num_pages }}&per_page={{ per_page }}" class="pagination-link">Last</a>
+                <a href="?page={{ cycles.next_page_number }}&{% if show_archived %}archived=1&{% endif %}per_page={{ per_page }}" class="pagination-link">Next</a>
+                <a href="?page={{ cycles.paginator.num_pages }}&{% if show_archived %}archived=1&{% endif %}per_page={{ per_page }}" class="pagination-link">Last</a>
             {% endif %}
         </div>
     </div>
@@ -188,9 +201,14 @@
 <div class="card">
     <div class="card-body">
         <div class="empty-state">
+            {% if show_archived %}
+            <h3 style="margin-bottom: 0.5rem;">No archived cycles</h3>
+            <a href="{% url 'review_cycle_list' %}" class="btn btn-secondary">Back to Current Cycles</a>
+            {% else %}
             <h3 style="margin-bottom: 0.5rem;">No review cycles yet</h3>
             <p style="margin-bottom: 1.5rem;">Create your first review cycle to start collecting feedback</p>
             <a href="{% url 'review_cycle_create' %}" class="btn btn-primary">Create Review Cycle</a>
+            {% endif %}
         </div>
     </div>
 </div>
