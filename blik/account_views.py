@@ -15,7 +15,11 @@ from accounts.import_service import (
     validate_import_data,
     generate_import_preview
 )
-from accounts.permissions import can_delete_organization_required
+from accounts.permissions import (
+    can_delete_organization_required,
+    can_manage_billing_required,
+)
+from core.audit import log_event, Actions
 from subscriptions.services import cancel_subscription, reactivate_subscription
 from subscriptions.models import Subscription
 
@@ -44,55 +48,73 @@ def account_settings(request):
 
 @login_required
 @require_POST
+@can_manage_billing_required(redirect_url='settings')
 def cancel_subscription_view(request):
     """Cancel subscription at period end."""
     org = request.organization
     if not org:
         messages.error(request, 'Organization not found.')
-        return redirect('account_settings')
+        return redirect('settings')
 
     try:
         subscription = Subscription.objects.get(organization=org)
         cancel_subscription(subscription)
+        log_event(request, Actions.SUBSCRIPTION_CHANGED, details={'change': 'cancel_at_period_end'})
         messages.success(request, 'Subscription will be canceled at the end of the current billing period.')
     except Subscription.DoesNotExist:
         messages.error(request, 'No active subscription found.')
     except Exception as e:
         messages.error(request, f'Error canceling subscription: {str(e)}')
 
-    return redirect('account_settings')
+    return redirect('settings')
 
 
 @login_required
 @require_POST
+@can_manage_billing_required(redirect_url='settings')
 def reactivate_subscription_view(request):
     """Reactivate a subscription that was set to cancel."""
     org = request.organization
     if not org:
         messages.error(request, 'Organization not found.')
-        return redirect('account_settings')
+        return redirect('settings')
 
     try:
         subscription = Subscription.objects.get(organization=org)
         reactivate_subscription(subscription)
+        log_event(request, Actions.SUBSCRIPTION_CHANGED, details={'change': 'reactivated'})
         messages.success(request, 'Subscription reactivated successfully.')
     except Subscription.DoesNotExist:
         messages.error(request, 'No subscription found.')
     except Exception as e:
         messages.error(request, f'Error reactivating subscription: {str(e)}')
 
-    return redirect('account_settings')
+    return redirect('settings')
 
 
 @login_required
 def export_data(request):
-    """Export all organization data as JSON."""
+    """Export all organization data as JSON.
+
+    The export contains every response and report, so it needs both
+    Organization Admin and Report Viewer access.
+    """
     org = request.organization
     if not org:
         return JsonResponse({'error': 'Organization not found'}, status=404)
 
+    if not (request.user.has_perm('accounts.can_manage_organization')
+            and request.user.has_perm('accounts.can_view_all_reports')):
+        messages.error(
+            request,
+            'Exporting all data requires both the Organization Admin and Report Viewer roles, '
+            'because the export includes every response and report.'
+        )
+        return redirect('settings')
+
     try:
         data = export_organization_data(org)
+        log_event(request, Actions.DATA_EXPORTED, target=org)
 
         # Create downloadable JSON response
         response = HttpResponse(
@@ -229,6 +251,10 @@ def import_data(request):
             importing_user=request.user
         )
 
+        log_event(request, Actions.DATA_IMPORTED, target=org,
+                  details={'success': bool(result.get('success')),
+                           'conflict_resolution': conflict_resolution})
+
         if result['success']:
             messages.success(request, f'Import completed successfully: {result["summary"]}')
 
@@ -260,19 +286,22 @@ def delete_account(request):
     password = request.POST.get('password')
     if not user.check_password(password):
         messages.error(request, 'Invalid password. Account deletion canceled.')
-        return redirect('account_settings')
+        return redirect('settings')
 
     try:
+        from accounts.permissions import OWNER, get_user_roles
+        if OWNER not in get_user_roles(user):
+            log_event(request, Actions.ACCOUNT_DELETED, details={'user_id': user.pk})
         delete_user_account(user)
         logout(request)
         messages.success(request, 'Your account has been deleted.')
         return redirect('landing:home')
     except ValueError as e:
         messages.error(request, str(e))
-        return redirect('account_settings')
+        return redirect('settings')
     except Exception as e:
         messages.error(request, f'Error deleting account: {str(e)}')
-        return redirect('account_settings')
+        return redirect('settings')
 
 
 @login_required
@@ -292,23 +321,24 @@ def delete_organization(request):
     password = request.POST.get('password')
     if not user.check_password(password):
         messages.error(request, 'Invalid password. Organization deletion canceled.')
-        return redirect('account_settings')
+        return redirect('settings')
 
     # Confirm with organization name
     org_name = request.POST.get('organization_name')
     if org_name != org.name:
         messages.error(request, 'Organization name does not match. Deletion canceled.')
-        return redirect('account_settings')
+        return redirect('settings')
 
     try:
         from accounts.services import delete_organization as delete_org_service
+        log_event(request, Actions.ORGANIZATION_DELETED, target=org)
         delete_org_service(org)
         logout(request)
         messages.success(request, 'Organization and all data have been deleted.')
         return redirect('landing:home')
     except Exception as e:
         messages.error(request, f'Error deleting organization: {str(e)}')
-        return redirect('account_settings')
+        return redirect('settings')
 
 
 @login_required

@@ -481,7 +481,8 @@ class ReportViewSetTest(TestCase):
         )
         UserProfile.objects.create(user=self.user, organization=self.org)
         assign_organization_admin(self.user)
-        self.user.profile.save()
+        from accounts.permissions import add_user_roles, REPORT_VIEWER
+        add_user_roles(self.user, REPORT_VIEWER)
 
         self.token = APIToken.objects.create(
             organization=self.org,

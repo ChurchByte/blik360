@@ -92,6 +92,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'axes.middleware.AxesMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'accounts.middleware.MFAMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'csp.middleware.CSPMiddleware',
     'core.middleware.SetupMiddleware',
@@ -257,6 +258,17 @@ AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',  # AxesStandaloneBackend should be first
     'django.contrib.auth.backends.ModelBackend',
 ]
+
+# Multi-factor authentication: Owners, Organization Admins and Report Viewers
+# must enter a code emailed to them after signing in. Only switch this off
+# temporarily (e.g. while email delivery is broken).
+# The test suite runs with it off by default; MFA tests opt in with
+# override_settings(MFA_REQUIRED=True).
+import sys as _sys
+_RUNNING_TESTS = len(_sys.argv) > 1 and _sys.argv[1] == 'test' or 'pytest' in _sys.modules
+MFA_REQUIRED = env.bool('MFA_REQUIRED', default=not _RUNNING_TESTS)
+MFA_CODE_TTL_MINUTES = 10
+MFA_MAX_ATTEMPTS = 5
 
 # Organization settings
 ORGANIZATION_NAME = env('ORGANIZATION_NAME', default='Blik')

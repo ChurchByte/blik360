@@ -77,3 +77,25 @@ class UpgradeStepAdmin(admin.ModelAdmin):
 # Note: django-axes models (AccessAttempt, AccessLog, AccessFailureLog) are
 # automatically registered by the axes package and available in Django admin
 # under the "Axes" section for security monitoring
+
+
+from .models import AuditLog  # noqa: E402
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    """Read-only view of the audit trail."""
+    list_display = ['created_at', 'organization_name', 'actor_email', 'action', 'target_label', 'ip_address']
+    list_filter = ['action', 'organization']
+    search_fields = ['actor_email', 'target_label', 'organization_name']
+    date_hierarchy = 'created_at'
+    readonly_fields = [f.name for f in AuditLog._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

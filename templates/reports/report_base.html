@@ -91,6 +91,9 @@
         <div class="actions">
             <a href="{% url 'review_cycle_detail' cycle.uuid %}" class="btn btn-secondary">Back to Cycle</a>
             <a href="{% url 'reports:regenerate_report' cycle.uuid %}" class="btn btn-primary">Regenerate Report</a>
+            {% if perms.accounts.can_investigate_responses %}
+            <a href="{% url 'reports:investigate_responses' cycle.uuid %}" class="btn btn-secondary">Investigation: reviewer identities</a>
+            {% endif %}
         </div>
         {% endif %}
 

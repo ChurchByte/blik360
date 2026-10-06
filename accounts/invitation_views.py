@@ -61,6 +61,9 @@ def send_invitation(request):
             invited_by=request.user,
             expires_at=timezone.now() + timedelta(days=7)
         )
+        from core.audit import log_event, Actions
+        log_event(request, Actions.MEMBER_INVITED, organization=org, target=invitation,
+                  target_label=email)
 
         # Build invitation URL
         invite_url = request.build_absolute_uri(
@@ -153,6 +156,9 @@ def accept_invitation(request, token):
         # Mark invitation accepted
         invitation.accepted_at = timezone.now()
         invitation.save()
+        from core.audit import log_event, Actions
+        log_event(request, Actions.INVITATION_ACCEPTED, actor=existing_user,
+                  organization=invitation.organization, target_label=invitation.email)
 
         messages.success(
             request,

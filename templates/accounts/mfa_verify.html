@@ -1,0 +1,45 @@
+{% extends 'base_public.html' %}
+
+{% block title %}Verify it's you - Blik 360 Feedback{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-header">
+        <h1>Check your email</h1>
+        <p>Your account can see sensitive feedback data, so we need a second step.
+           Enter the 6-digit code we sent to <strong>{{ email }}</strong>.</p>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" action="{% url 'mfa_verify' %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="form-group">
+            <label for="id_code">Sign-in code</label>
+            <input type="text" name="code" id="id_code" class="form-control"
+                   inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}"
+                   maxlength="7" required autofocus>
+            <small class="help-text">The code expires after {{ minutes }} minutes.</small>
+        </div>
+        <button type="submit" class="btn-primary">Verify</button>
+    </form>
+
+    <form method="post" action="{% url 'mfa_resend' %}" class="register-link">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <p>Didn't get it? <button type="submit" style="background: none; border: none; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit;">Send a new code</button></p>
+    </form>
+
+    <form method="post" action="{% url 'logout' %}" class="register-link">
+        {% csrf_token %}
+        <p><button type="submit" style="background: none; border: none; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit;">Sign out</button></p>
+    </form>
+</div>
+{% endblock %}

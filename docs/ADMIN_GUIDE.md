@@ -82,10 +82,57 @@ registration options) are always editable in the UI.
 
 ## Who Can See What
 
-Blik has two roles inside an organization:
+Everyone in an organization is a **Member**. Extra roles are assigned on the
+**Team** page and can be combined (for example Organization Admin + Report Viewer).
 
-| | Organization Admin | Organization Member |
-|---|---|---|
+| Role | What it adds |
+|---|---|
+| **Owner** (one per organization) | Billing, deleting the organization, transferring ownership, the **Audit Log**. Always also an Organization Admin. |
+| **Organization Admin** | Settings, team and roles, invitations, reviewees, API tokens and webhooks, GDPR deletions, and running review cycles for anyone. **No access to report content.** |
+| **Cycle Manager** | Creates and runs review cycles for anyone and sees completion progress, but **not results**. |
+| **Report Viewer** (HR only) | Reads every report. For a formal investigation, can see which invited reviewer gave which answers. |
+| **Member** | Their own cycles and their own reports. |
+
+| | Owner / Org Admin | Cycle Manager | Report Viewer | Member |
+|---|---|---|---|---|
+| Cycles list, detail, progress | All | All | All | Own only |
+| Report content | Only if also Report Viewer | No | All | Own only |
+| Reviewer identities (investigation) | Only if also Report Viewer | No | Yes, with a recorded reason | No |
+| Full data export | Only if also Report Viewer | No | No | No |
+| Sign-in code by email (MFA) | Required | — | Required | — |
+
+**Ownership.** Whoever set up the instance (or signed up) is the Owner. The
+Owner can hand the role to another member with **Make owner** on the Team page;
+they stay an Organization Admin. The Owner can't delete their own account until
+ownership has been transferred.
+
+**Report Viewers and reviewer identities.** Reviewers invited by email are linked
+to their answers through their invitation. A Report Viewer can open **Investigation:
+reviewer identities** from a report, give a reason (and optional case number), and
+see each invited reviewer's email next to their answers. Every access is written
+to the audit log with the reason. Reviewers who joined through a shared invitation
+link cannot be identified. A Report Viewer cannot investigate feedback about
+themselves. Reviewers are told all of this on the feedback form.
+
+**MFA.** Owners, Organization Admins and Report Viewers get a 6-digit code by
+email after signing in (it expires after 10 minutes). Email delivery must work
+for these people to sign in. In an emergency set `MFA_REQUIRED=False` in the
+environment and restart, then switch it back on.
+
+**Audit log.** Role changes, ownership transfers, invitations, report views,
+investigations, exports and imports, deletions, settings and API changes, and
+sign-ins are recorded. Entries can't be edited. The Owner sees them under
+**Audit Log** in the navigation bar; superusers can also browse them in Django admin.
+
+A member's own report reaches them through a private link containing an access
+token. That link needs no login — treat it as a secret. It is only shown to the
+reviewee and Report Viewers, and is emailed to the reviewee when a cycle closes.
+
+The same rules apply to the REST API (`/api/v1/cycles/`, `/api/v1/reports/`):
+a token authenticates as the user who created it and sees exactly what that user
+would see in the dashboard.
+
+---|---|---|
 | Cycles list & detail | All cycles in the organization | Only cycles where they are the reviewee |
 | Reports | All reports in the organization | Only their own |
 | Organization settings, team, API tokens | Yes | No |

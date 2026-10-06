@@ -10,6 +10,7 @@ from core.models import Organization
 from accounts.models import UserProfile, OrganizationInvitation, PasswordResetToken
 from accounts.services import create_user_with_email_as_username
 from accounts.forms import ForgotPasswordForm, ResetPasswordForm
+from accounts.permissions import get_user_roles, role_labels
 
 
 @require_http_methods(["GET", "POST"])
@@ -145,6 +146,9 @@ def signup_view(request):
         # Mark invitation as accepted
         invitation.accepted_at = timezone.now()
         invitation.save()
+        from core.audit import log_event, Actions
+        log_event(request, Actions.INVITATION_ACCEPTED, actor=user,
+                  organization=invitation.organization, target_label=invitation.email)
 
         # Send welcome email
         try:
@@ -314,5 +318,79 @@ def profile_view(request):
         'organization': organization,
         'form': form,
         'cycles_with_reports': cycles_with_reports,
+        'role_labels': role_labels(get_user_roles(request.user)),
     }
     return render(request, 'accounts/profile.html', context)
+
+
+# ---------------------------------------------------------------------------
+# Email-code MFA
+# ---------------------------------------------------------------------------
+
+def _safe_next(request, default='admin_dashboard'):
+    from django.utils.http import url_has_allowed_host_and_scheme
+    nxt = request.POST.get('next') or request.GET.get('next') or ''
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()},
+                                               require_https=request.is_secure()):
+        return nxt
+    from django.urls import reverse
+    return reverse(default)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+@ratelimit(key='user', rate='10/m', method='POST', block=True)
+def mfa_verify(request):
+    """Second sign-in step for admins and report viewers: enter the emailed code."""
+    from accounts import mfa
+    from core.audit import log_event, Actions
+
+    if not mfa.user_needs_mfa(request.user) or mfa.is_verified(request):
+        return redirect(_safe_next(request))
+
+    if request.method == 'POST':
+        ok, error = mfa.verify_code(request.user, request.POST.get('code'))
+        if ok:
+            mfa.mark_verified(request)
+            log_event(request, Actions.MFA_VERIFIED)
+            return redirect(_safe_next(request))
+        log_event(request, Actions.MFA_FAILED, details={'reason': error})
+        messages.error(request, error)
+    elif mfa.active_code(request.user) is None:
+        allowed, _wait = mfa.can_send_code(request.user)
+        if allowed:
+            if mfa.issue_code(request.user):
+                log_event(request, Actions.MFA_CODE_SENT)
+            else:
+                messages.error(request, 'We could not send your sign-in code. Please try again shortly or contact your administrator.')
+
+    return render(request, 'accounts/mfa_verify.html', {
+        'email': request.user.email,
+        'next': request.POST.get('next') or request.GET.get('next', ''),
+        'minutes': mfa.CODE_TTL_MINUTES,
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def mfa_resend(request):
+    """Send a fresh sign-in code (throttled)."""
+    from urllib.parse import urlencode
+    from django.urls import reverse
+    from accounts import mfa
+    from core.audit import log_event, Actions
+
+    allowed, wait = mfa.can_send_code(request.user)
+    if not allowed:
+        messages.error(request, f'Please wait {wait} seconds before requesting another code.')
+    elif mfa.issue_code(request.user):
+        log_event(request, Actions.MFA_CODE_SENT, details={'resend': True})
+        messages.success(request, f'A new code has been sent to {request.user.email}.')
+    else:
+        messages.error(request, 'We could not send your sign-in code. Please try again shortly.')
+
+    url = reverse('mfa_verify')
+    nxt = request.POST.get('next')
+    if nxt:
+        url += '?' + urlencode({'next': nxt})
+    return redirect(url)

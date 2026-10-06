@@ -72,7 +72,7 @@
                         {{ item.cycle.created_at|date:"M d, Y" }}
                     </td>
                     <td>
-                        {% if perms.accounts.can_manage_organization %}
+                        {% if perms.accounts.can_manage_cycles %}
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <!-- Split button: New Cycle (main action) + dropdown for other questionnaires -->
                             <div class="btn-group" style="position: relative; display: inline-flex;">

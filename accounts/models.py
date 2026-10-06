@@ -20,7 +20,7 @@ class UserProfile(TimeStampedModel):
     )
     can_create_cycles_for_others = models.BooleanField(
         default=False,
-        help_text='If False, user can only create cycles for themselves'
+        help_text='Mirrors the Cycle Manager role (kept in sync by accounts.permissions.set_user_roles)'
     )
     has_seen_welcome = models.BooleanField(
         default=False,
@@ -32,15 +32,52 @@ class UserProfile(TimeStampedModel):
     class Meta:
         db_table = 'user_profiles'
         ordering = ['user__username']
+        # Granted through role groups — see accounts/permissions.py.
         permissions = [
+            # Owner
+            ('can_manage_billing', 'Can manage billing and subscription'),
+            ('can_delete_organization', 'Can delete organization'),
+            ('can_transfer_ownership', 'Can transfer organization ownership'),
+            ('can_view_audit_log', 'Can view the audit log'),
+            # Organization Admin
             ('can_invite_members', 'Can invite team members'),
             ('can_manage_organization', 'Can manage organization settings'),
-            ('can_delete_organization', 'Can delete organization'),
+            # Cycle Manager (also held by Organization Admin)
+            ('can_manage_cycles', 'Can create and run review cycles for others'),
+            # Report Viewer
             ('can_view_all_reports', 'Can view all organization reports'),
+            ('can_investigate_responses', 'Can view reviewer identities for investigations'),
         ]
 
     def __str__(self):
         return f"{self.user.username} - {self.organization.name}"
+
+
+class EmailMFACode(models.Model):
+    """
+    One-time code emailed to a user as the second login factor.
+
+    Only a keyed hash of the code is stored. A new code supersedes any earlier
+    unused one; each code expires after a few minutes and allows a limited
+    number of attempts (see accounts/mfa.py).
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='mfa_codes'
+    )
+    code_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'email_mfa_codes'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"MFA code for {self.user_id} ({self.created_at:%Y-%m-%d %H:%M})"
 
 
 class OrganizationInvitation(TimeStampedModel):

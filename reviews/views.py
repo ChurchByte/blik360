@@ -120,6 +120,8 @@ def feedback_form(request, token):
         'reviewee': cycle.reviewee,
         'existing_responses': existing_responses,
         'invitation_token': invitation_token,
+        'organization': cycle.reviewee.organization,
+        'min_responses': cycle.reviewee.organization.min_responses_for_anonymity,
     }
 
     return render(request, 'reviews/feedback_form.html', context)

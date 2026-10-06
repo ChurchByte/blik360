@@ -59,6 +59,9 @@
                 <li><a href="{% url 'product_review_list' %}" {% if 'product_review' in request.resolver_match.url_name %}class="active"{% endif %}>Reviews</a></li>
                 {% endif %}
                 <li><a href="{% url 'settings' %}" {% if request.resolver_match.url_name == 'settings' %}class="active"{% endif %}>Settings</a></li>
+                {% if perms.accounts.can_view_audit_log %}
+                <li><a href="{% url 'audit_log' %}" {% if request.resolver_match.url_name == 'audit_log' %}class="active"{% endif %}>Audit Log</a></li>
+                {% endif %}
                 {% if user.is_superuser %}
                 <li><a href="{% url 'superuser_create_organization' %}" {% if request.resolver_match.url_name == 'superuser_create_organization' %}class="active"{% endif %}>Create Org</a></li>
                 <li><a href="/admin/">Admin</a></li>

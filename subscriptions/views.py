@@ -208,9 +208,9 @@ def handle_checkout_session_completed(session):
         can_create_cycles_for_others=True
     )
 
-    # Assign organization admin permissions (Django permission system)
-    from accounts.permissions import assign_organization_admin
-    assign_organization_admin(user)
+    # The person who signed up owns the organization
+    from accounts.permissions import assign_organization_owner
+    assign_organization_owner(user)
 
     # Create subscription
     # For trial subscriptions, use trial dates as current period

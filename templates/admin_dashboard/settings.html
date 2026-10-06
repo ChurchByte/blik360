@@ -241,10 +241,10 @@
                                 {% if not perms.accounts.can_manage_organization %}disabled{% endif %}
                             >
                             <label class="form-label" for="default_users_can_create_cycles" style="display: inline; font-weight: normal;">
-                                New users can create cycles for others
+                                New members join as Cycle Managers
                             </label>
                         </div>
-                        <small class="help-text">If disabled, new users can only create cycles for themselves</small>
+                        <small class="help-text">If ticked, people who accept an invitation can create and run cycles for others. Otherwise they can only create cycles for themselves.</small>
                     </div>
 
                     {% if perms.accounts.can_manage_organization %}
@@ -592,15 +592,17 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
 
             <!-- Export Data -->
+            {% if perms.accounts.can_manage_organization and perms.accounts.can_view_all_reports %}
             <div>
                 <h3 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 6px;">Export Organization Data</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.8125rem;">
-                    Download all data in JSON format (GDPR compliant).
+                    Download all data, including every response and report, in JSON format. The download is recorded in the audit log.
                 </p>
                 <a href="{% url 'account:export_data' %}" class="btn btn-secondary btn-sm">
                     Download Export
                 </a>
             </div>
+            {% endif %}
 
             <!-- Import Data -->
             {% if is_org_admin %}
@@ -615,7 +617,7 @@
             </div>
             {% endif %}
 
-            {% if subscription %}
+            {% if subscription and perms.accounts.can_manage_billing %}
             <!-- Subscription Management -->
             <div style="padding-left: 1.5rem; border-left: 1px solid var(--border-color);">
                 <h3 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 6px;">Subscription</h3>
@@ -643,9 +645,9 @@
             <!-- Delete Account -->
             <div style="padding-left: 1.5rem; border-left: 1px solid var(--border-color);">
                 <h3 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 6px; color: #dc2626;">Delete Account</h3>
-                {% if is_last_admin %}
+                {% if perms.accounts.can_transfer_ownership and not user.is_superuser %}
                     <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.8125rem;">
-                        Last admin. Delete organization or add another admin first.
+                        You are the owner. Transfer ownership on the Team page first, or delete the organization.
                     </p>
                     <button class="btn btn-danger btn-sm" disabled>Delete Account</button>
                 {% else %}
@@ -656,7 +658,7 @@
                 {% endif %}
             </div>
 
-            {% if is_org_admin %}
+            {% if perms.accounts.can_delete_organization %}
             <!-- Delete Organization -->
             <div style="padding-left: 1.5rem; border-left: 1px solid var(--border-color);">
                 <h3 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 6px; color: #dc2626;">Delete Organization</h3>
@@ -690,7 +692,7 @@
 </div>
 
 <!-- Delete Organization Modal -->
-{% if is_org_admin %}
+{% if perms.accounts.can_delete_organization %}
 <div id="deleteOrgModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
     <div style="background: var(--bg-card); padding: 2rem; border-radius: 8px; max-width: 500px; width: 90%;">
         <h3 style="margin-top: 0; color: #dc2626;">Delete Organization</h3>

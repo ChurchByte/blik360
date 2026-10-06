@@ -64,9 +64,8 @@
                     <tr>
                         <th>Name</th>
                         <th>Email</th>
-                        <th>Role</th>
+                        <th>Roles</th>
                         <th>Joined</th>
-                        <th>Permissions</th>
                         {% if perms.accounts.can_manage_organization %}
                         <th>Actions</th>
                         {% endif %}
@@ -86,26 +85,25 @@
                         <td>
                             {% if user_profile.user.is_superuser %}
                                 <span class="badge" style="background: #7c3aed; color: white;">Super Admin</span>
-                            {% elif user_profile.is_org_admin %}
-                                <span class="badge" style="background: #059669; color: white;">Organization Admin</span>
-                            {% else %}
-                                <span class="badge" style="background: #6b7280; color: white;">Member</span>
                             {% endif %}
+                            {% if user_profile.is_owner %}<span class="badge" style="background: #1e3a8a; color: white;">Owner</span>{% endif %}
+                            {% if user_profile.is_org_admin %}<span class="badge" style="background: #059669; color: white;">Organization Admin</span>{% endif %}
+                            {% if user_profile.is_cycle_manager %}<span class="badge" style="background: #0ea5e9; color: white;">Cycle Manager</span>{% endif %}
+                            {% if user_profile.is_report_viewer %}<span class="badge" style="background: #b45309; color: white;">Report Viewer</span>{% endif %}
+                            {% if not user_profile.role_labels and not user_profile.user.is_superuser %}<span class="badge" style="background: #6b7280; color: white;">Member</span>{% endif %}
                         </td>
                         <td>{{ user_profile.user.date_joined|date:"M d, Y" }}</td>
-                        <td>
-                            {% if user_profile.can_create_cycles_for_others %}
-                                <span class="badge" style="background: #0ea5e9; color: white;">Can manage cycles</span>
-                            {% else %}
-                                <span class="badge" style="background: #f59e0b; color: white;">Self-only</span>
-                            {% endif %}
-                        </td>
                         {% if perms.accounts.can_manage_organization %}
                         <td>
                             {% if user_profile.user.id != request.user.id and not user_profile.user.is_superuser %}
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="showManagePermissionsModal({{ user_profile.id }}, '{{ user_profile.user.username }}', {{ user_profile.is_org_admin|lower }}, {{ user_profile.can_create_cycles_for_others|lower }})">
-                                Manage
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }})">
+                                Manage roles
                             </button>
+                            {% if viewer_is_owner and not user_profile.is_owner %}
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="showTransferModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}')">
+                                Make owner
+                            </button>
+                            {% endif %}
                             {% else %}
                             <span style="color: var(--text-tertiary); font-size: 12px;">—</span>
                             {% endif %}
@@ -129,14 +127,15 @@
                             <span class="badge" style="background: #6b7280; color: white; font-size: 11px; margin-left: 4px;">You</span>
                         {% endif %}
                     </div>
-                    <div>
-                        {% if user_profile.user.is_superuser %}
-                            <span class="badge" style="background: #7c3aed; color: white; font-size: 11px;">Super Admin</span>
-                        {% elif user_profile.is_org_admin %}
-                            <span class="badge" style="background: #059669; color: white; font-size: 11px;">Organization Admin</span>
-                        {% else %}
-                            <span class="badge" style="background: #6b7280; color: white; font-size: 11px;">Member</span>
-                        {% endif %}
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end;">
+                            {% if user_profile.user.is_superuser %}
+                                <span class="badge" style="background: #7c3aed; color: white;">Super Admin</span>
+                            {% endif %}
+                            {% if user_profile.is_owner %}<span class="badge" style="background: #1e3a8a; color: white;">Owner</span>{% endif %}
+                            {% if user_profile.is_org_admin %}<span class="badge" style="background: #059669; color: white;">Organization Admin</span>{% endif %}
+                            {% if user_profile.is_cycle_manager %}<span class="badge" style="background: #0ea5e9; color: white;">Cycle Manager</span>{% endif %}
+                            {% if user_profile.is_report_viewer %}<span class="badge" style="background: #b45309; color: white;">Report Viewer</span>{% endif %}
+                            {% if not user_profile.role_labels and not user_profile.user.is_superuser %}<span class="badge" style="background: #6b7280; color: white;">Member</span>{% endif %}
                     </div>
                 </div>
                 <div class="mobile-card-body">
@@ -148,21 +147,16 @@
                         <span class="mobile-card-label">Joined</span>
                         <span>{{ user_profile.user.date_joined|date:"M d, Y" }}</span>
                     </div>
-                    <div class="mobile-card-row">
-                        <span class="mobile-card-label">Permissions</span>
-                        <span>
-                            {% if user_profile.can_create_cycles_for_others %}
-                                <span class="badge" style="background: #0ea5e9; color: white; font-size: 11px;">Can manage cycles</span>
-                            {% else %}
-                                <span class="badge" style="background: #f59e0b; color: white; font-size: 11px;">Self-only</span>
-                            {% endif %}
-                        </span>
-                    </div>
                     {% if perms.accounts.can_manage_organization %}
                         {% if user_profile.user.id != request.user.id and not user_profile.user.is_superuser %}
-                        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 0.5rem;" onclick="showManagePermissionsModal({{ user_profile.id }}, '{{ user_profile.user.username }}', {{ user_profile.is_org_admin|lower }}, {{ user_profile.can_create_cycles_for_others|lower }})">
-                            Manage Permissions
+                        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 0.5rem;" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }})">
+                            Manage roles
                         </button>
+                        {% if viewer_is_owner and not user_profile.is_owner %}
+                        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 0.5rem;" onclick="showTransferModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}')">
+                            Make owner
+                        </button>
+                        {% endif %}
                         {% endif %}
                     {% endif %}
                 </div>
@@ -279,83 +273,120 @@
     </div>
 </div>
 
-<!-- Manage Permissions Modal -->
+<!-- Manage Roles Modal -->
 {% if perms.accounts.can_manage_organization %}
-<div id="manage-permissions-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
-    <div style="background: var(--bg-card); padding: 2rem; border-radius: 12px; max-width: 500px; width: 90%;">
-        <h2 style="margin-top: 0;">Manage User Permissions</h2>
+<div id="manage-roles-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
+    <div style="background: var(--bg-card); padding: 2rem; border-radius: 12px; max-width: 560px; width: 90%; max-height: 90vh; overflow-y: auto;">
+        <h2 style="margin-top: 0;">Manage roles</h2>
         <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-            Update permissions for <strong id="modal-username"></strong>
+            Roles for <strong id="roles-modal-email"></strong>. Everyone is a Member; tick any extra roles they need.
         </p>
         <form method="post" action="{% url 'update_user_permissions' %}">
             {% csrf_token %}
-            <input type="hidden" id="modal-user-id" name="user_profile_id">
+            <input type="hidden" id="roles-modal-user-id" name="user_profile_id">
 
-            <div class="form-group">
-                <label class="form-label">Role</label>
-                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    <div class="form-check">
-                        <input type="radio" id="role-admin" name="role" value="admin" class="form-check-input">
-                        <label for="role-admin" style="display: inline; font-weight: normal;">
-                            <strong>Organization Admin</strong>
-                            <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
-                                Can invite members, manage organization settings, and delete organization
-                            </small>
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input type="radio" id="role-member" name="role" value="member" class="form-check-input">
-                        <label for="role-member" style="display: inline; font-weight: normal;">
-                            <strong>Member</strong>
-                            <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
-                                Regular team member with limited permissions
-                            </small>
-                        </label>
-                    </div>
-                </div>
+            <div id="roles-modal-owner-note" style="display: none; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 1rem; font-size: 0.875rem;">
+                This person is the <strong>Owner</strong> (billing, deleting the organization, audit log). The owner is always an Organization Admin.
             </div>
 
-            <div class="form-group">
-                <label class="form-label">Additional Permissions</label>
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
                 <div class="form-check">
-                    <input type="checkbox" id="can-manage-cycles" name="can_create_cycles_for_others" class="form-check-input">
-                    <label for="can-manage-cycles" style="display: inline; font-weight: normal;">
-                        Can create review cycles for others
+                    <input type="checkbox" id="role-org-admin" name="roles" value="org_admin" class="form-check-input" onchange="syncRoleCheckboxes()">
+                    <label for="role-org-admin" style="display: inline; font-weight: normal;">
+                        <strong>Organization Admin</strong>
                         <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
-                            Without this, user can only create cycles for themselves
+                            Manages settings, the team and roles, reviewees, and runs review cycles for anyone. Cannot read report content.
+                        </small>
+                    </label>
+                </div>
+                <div class="form-check" id="role-cycle-manager-row">
+                    <input type="checkbox" id="role-cycle-manager" name="roles" value="cycle_manager" class="form-check-input">
+                    <label for="role-cycle-manager" style="display: inline; font-weight: normal;">
+                        <strong>Cycle Manager</strong>
+                        <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
+                            Creates and runs review cycles for others and sees completion progress, but not results.
+                        </small>
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="role-report-viewer" name="roles" value="report_viewer" class="form-check-input">
+                    <label for="role-report-viewer" style="display: inline; font-weight: normal;">
+                        <strong>Report Viewer (HR)</strong>
+                        <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
+                            Reads every report. For investigations, can see which reviewer gave which answers (each access is recorded with a reason). Only give this to HR staff.
                         </small>
                     </label>
                 </div>
             </div>
 
+            <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 1rem;">
+                Organization Admins and Report Viewers must enter a code sent to their email each time they sign in.
+            </p>
+
             <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
-                <button type="button" class="btn btn-secondary" onclick="hideManagePermissionsModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Update Permissions</button>
+                <button type="button" class="btn btn-secondary" onclick="hideModal('manage-roles-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save roles</button>
             </div>
         </form>
     </div>
 </div>
 
+{% if viewer_is_owner %}
+<div id="transfer-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
+    <div style="background: var(--bg-card); padding: 2rem; border-radius: 12px; max-width: 500px; width: 90%;">
+        <h2 style="margin-top: 0;">Transfer ownership</h2>
+        <p style="color: var(--text-secondary);">
+            Make <strong id="transfer-modal-email"></strong> the owner. They will control billing, deleting the organization and the audit log.
+            You will stay an Organization Admin.
+        </p>
+        <form method="post" action="{% url 'transfer_ownership' %}">
+            {% csrf_token %}
+            <input type="hidden" id="transfer-modal-user-id" name="user_profile_id">
+            <div class="form-group">
+                <label for="transfer-password">Confirm with your password</label>
+                <input type="password" id="transfer-password" name="password" class="form-control" required autocomplete="current-password">
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                <button type="button" class="btn btn-secondary" onclick="hideModal('transfer-modal')">Cancel</button>
+                <button type="submit" class="btn btn-danger">Transfer ownership</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <script>
-function showManagePermissionsModal(userId, username, isStaff, canCreateCycles) {
-    document.getElementById('modal-user-id').value = userId;
-    document.getElementById('modal-username').textContent = username;
-
-    // Set role radio buttons
-    if (isStaff) {
-        document.getElementById('role-admin').checked = true;
-    } else {
-        document.getElementById('role-member').checked = true;
-    }
-
-    // Set can create cycles checkbox
-    document.getElementById('can-manage-cycles').checked = canCreateCycles;
-
-    document.getElementById('manage-permissions-modal').style.display = 'flex';
+function syncRoleCheckboxes() {
+    // Organization Admins can already run cycles, so the Cycle Manager option is hidden for them.
+    const isAdmin = document.getElementById('role-org-admin').checked;
+    const cmRow = document.getElementById('role-cycle-manager-row');
+    const cm = document.getElementById('role-cycle-manager');
+    cmRow.style.display = isAdmin ? 'none' : '';
+    if (isAdmin) { cm.checked = false; }
 }
 
-function hideManagePermissionsModal() {
-    document.getElementById('manage-permissions-modal').style.display = 'none';
+function showManageRolesModal(userId, email, isOwner, isAdmin, isCycleManager, isReportViewer) {
+    document.getElementById('roles-modal-user-id').value = userId;
+    document.getElementById('roles-modal-email').textContent = email;
+    document.getElementById('roles-modal-owner-note').style.display = isOwner ? 'block' : 'none';
+    const adminBox = document.getElementById('role-org-admin');
+    adminBox.checked = isAdmin || isOwner;
+    adminBox.disabled = isOwner;
+    document.getElementById('role-cycle-manager').checked = isCycleManager;
+    document.getElementById('role-report-viewer').checked = isReportViewer;
+    syncRoleCheckboxes();
+    document.getElementById('manage-roles-modal').style.display = 'flex';
+}
+
+function showTransferModal(userId, email) {
+    document.getElementById('transfer-modal-user-id').value = userId;
+    document.getElementById('transfer-modal-email').textContent = email;
+    document.getElementById('transfer-password').value = '';
+    document.getElementById('transfer-modal').style.display = 'flex';
+}
+
+function hideModal(id) {
+    document.getElementById(id).style.display = 'none';
 }
 </script>
 {% endif %}

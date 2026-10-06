@@ -10,7 +10,7 @@ import secrets
 import string
 from datetime import datetime
 from django.db import transaction
-from django.contrib.auth.models import User, Permission
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
@@ -494,13 +494,18 @@ def import_users(organization, users_data, conflict_resolution='skip', send_welc
                         existing_user.save()
                     result['updated'] += 1
 
-                    # Update profile if exists
-                    try:
-                        profile = existing_user.profile
-                        profile.can_create_cycles_for_others = user_data.get('can_create_cycles_for_others', False)
-                        profile.save()
-                    except UserProfile.DoesNotExist:
-                        pass
+                    # Update the Cycle Manager role if the user is in this organization.
+                    # Other roles are never changed by an import.
+                    from accounts.permissions import (
+                        get_user_roles, set_user_roles, CYCLE_MANAGER,
+                    )
+                    if UserProfile.objects.filter(user=existing_user, organization=organization).exists():
+                        roles = get_user_roles(existing_user)
+                        if user_data.get('can_create_cycles_for_others', False):
+                            roles.add(CYCLE_MANAGER)
+                        else:
+                            roles.discard(CYCLE_MANAGER)
+                        set_user_roles(existing_user, roles)
 
                     continue
 
@@ -527,13 +532,16 @@ def import_users(organization, users_data, conflict_resolution='skip', send_welc
                 can_create_cycles_for_others=user_data.get('can_create_cycles_for_others', False),
             )
 
-            # Set permissions
+            # Roles. Ownership is never imported; the importing org keeps its owner.
+            from accounts.permissions import (
+                set_user_roles, ASSIGNABLE_ROLES, ORG_ADMIN, CYCLE_MANAGER,
+            )
+            roles = {r for r in (user_data.get('roles') or []) if r in ASSIGNABLE_ROLES}
             if user_data.get('is_org_admin', False):
-                try:
-                    perm = Permission.objects.get(codename='can_manage_organization')
-                    user.user_permissions.add(perm)
-                except Permission.DoesNotExist:
-                    result['warnings'].append(f"Permission 'can_manage_organization' not found for user {username}")
+                roles.add(ORG_ADMIN)
+            if user_data.get('can_create_cycles_for_others', False):
+                roles.add(CYCLE_MANAGER)
+            set_user_roles(user, roles)
 
             result['created'] += 1
             result['warnings'].append(

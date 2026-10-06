@@ -184,11 +184,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span>Permissions</span>
                     </div>
                     <div class="small">
-                        {% if profile.can_create_cycles_for_others %}
-                            <span class="badge bg-success">Can create cycles for others</span>
-                        {% else %}
-                            <span class="badge bg-warning">Self cycles only</span>
-                        {% endif %}
+                        {% for label in role_labels %}
+                            <span class="badge bg-success">{{ label }}</span>
+                        {% empty %}
+                            <span class="badge bg-warning">Member</span>
+                        {% endfor %}
                     </div>
 
                     <hr>

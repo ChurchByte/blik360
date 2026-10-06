@@ -1,317 +1,415 @@
 """
-Organization-level permission system using Django's permission framework.
+Organization roles and permission checks.
 
-This module provides:
-1. Custom permissions for organization admins
-2. Decorators for view-level permission checks
-3. Utility functions for permission assignment
+Roles are Django groups and can be combined (a person can be, say, an
+Organization Admin and a Report Viewer). Every user in an organization is at
+least a Member.
+
+    Role               Permissions (accounts.<codename>)
+    -----------------  ---------------------------------------------------------
+    Owner              can_manage_billing, can_delete_organization,
+                       can_transfer_ownership, can_view_audit_log
+                       (an Owner is always also an Organization Admin)
+    Organization Admin can_manage_organization, can_invite_members,
+                       can_manage_cycles
+    Cycle Manager      can_manage_cycles
+    Report Viewer      can_view_all_reports, can_investigate_responses
+    Member             (none) — own cycles and own reports only
+
+Report content is only ever visible to Report Viewers and to the reviewee.
+Organization Admins and Cycle Managers can see that cycles exist and how far
+along they are, but not the results.
 """
 from functools import wraps
+
+from django.contrib import messages
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 from django.shortcuts import redirect
-from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+
 from accounts.models import UserProfile
 
 
-# Group names
+# ---------------------------------------------------------------------------
+# Role definitions
+# ---------------------------------------------------------------------------
+
+OWNER = 'owner'
+ORG_ADMIN = 'org_admin'
+CYCLE_MANAGER = 'cycle_manager'
+REPORT_VIEWER = 'report_viewer'
+
+# Group names. ORG_ADMIN_GROUP / ORG_MEMBER_GROUP keep their historical names
+# so existing databases keep working.
+ORG_OWNER_GROUP = 'Organization Owner'
 ORG_ADMIN_GROUP = 'Organization Admin'
+CYCLE_MANAGER_GROUP = 'Cycle Manager'
+REPORT_VIEWER_GROUP = 'Report Viewer'
 ORG_MEMBER_GROUP = 'Organization Member'
+
+ROLE_GROUPS = {
+    OWNER: ORG_OWNER_GROUP,
+    ORG_ADMIN: ORG_ADMIN_GROUP,
+    CYCLE_MANAGER: CYCLE_MANAGER_GROUP,
+    REPORT_VIEWER: REPORT_VIEWER_GROUP,
+}
+GROUP_ROLES = {group: role for role, group in ROLE_GROUPS.items()}
+
+ROLE_LABELS = {
+    OWNER: 'Owner',
+    ORG_ADMIN: 'Organization Admin',
+    CYCLE_MANAGER: 'Cycle Manager',
+    REPORT_VIEWER: 'Report Viewer',
+}
+
+# Display order
+ROLE_ORDER = [OWNER, ORG_ADMIN, CYCLE_MANAGER, REPORT_VIEWER]
+
+# Roles an Organization Admin can grant or remove on the Team page. Owner is
+# only changed by transferring ownership.
+ASSIGNABLE_ROLES = [ORG_ADMIN, CYCLE_MANAGER, REPORT_VIEWER]
+
+PERMISSION_NAMES = {
+    'can_manage_billing': 'Can manage billing and subscription',
+    'can_delete_organization': 'Can delete organization',
+    'can_transfer_ownership': 'Can transfer organization ownership',
+    'can_view_audit_log': 'Can view the audit log',
+    'can_invite_members': 'Can invite team members',
+    'can_manage_organization': 'Can manage organization settings',
+    'can_manage_cycles': 'Can create and run review cycles for others',
+    'can_view_all_reports': 'Can view all organization reports',
+    'can_investigate_responses': 'Can view reviewer identities for investigations',
+}
+
+GROUP_PERMISSIONS = {
+    ORG_OWNER_GROUP: [
+        'can_manage_billing',
+        'can_delete_organization',
+        'can_transfer_ownership',
+        'can_view_audit_log',
+    ],
+    ORG_ADMIN_GROUP: [
+        'can_manage_organization',
+        'can_invite_members',
+        'can_manage_cycles',
+    ],
+    CYCLE_MANAGER_GROUP: ['can_manage_cycles'],
+    REPORT_VIEWER_GROUP: ['can_view_all_reports', 'can_investigate_responses'],
+    ORG_MEMBER_GROUP: [],
+}
+
+# Holding any of these means the account must pass email MFA (accounts/mfa.py).
+PRIVILEGED_PERMISSIONS = [
+    'accounts.can_manage_organization',
+    'accounts.can_manage_billing',
+    'accounts.can_view_all_reports',
+    'accounts.can_investigate_responses',
+]
 
 
 def ensure_permission_groups():
     """
-    Create default permission groups if they don't exist.
+    Create the role permissions and groups, and make each group's permissions
+    match GROUP_PERMISSIONS. Safe to call repeatedly.
 
-    Organization Admin group has permissions to:
-    - Invite team members
-    - Manage organization settings
-    - Delete organization
-    - View all reports
-    - Create cycles for others
-
-    Organization Member group has permissions to:
-    - View own data
-    - Submit feedback
-    - View own reports
+    Returns (admin_group, member_group) for backward compatibility.
     """
-    # Lazy import to avoid DB access during module import
     from django.apps import apps
     if not apps.ready:
         return None, None
 
     content_type = ContentType.objects.get_for_model(UserProfile)
+    perms = {}
+    for codename, name in PERMISSION_NAMES.items():
+        perm, _ = Permission.objects.get_or_create(
+            codename=codename,
+            content_type=content_type,
+            defaults={'name': name},
+        )
+        perms[codename] = perm
 
-    # Create or get permissions
-    invite_permission, _ = Permission.objects.get_or_create(
-        codename='can_invite_members',
-        name='Can invite team members',
-        content_type=content_type,
-    )
+    groups = {}
+    for group_name, codenames in GROUP_PERMISSIONS.items():
+        group, _ = Group.objects.get_or_create(name=group_name)
+        wanted = {perms[c].pk for c in codenames}
+        current = set(group.permissions.values_list('pk', flat=True))
+        if wanted != current:
+            group.permissions.set([perms[c] for c in codenames])
+        groups[group_name] = group
 
-    manage_org_permission, _ = Permission.objects.get_or_create(
-        codename='can_manage_organization',
-        name='Can manage organization settings',
-        content_type=content_type,
-    )
+    return groups[ORG_ADMIN_GROUP], groups[ORG_MEMBER_GROUP]
 
-    delete_org_permission, _ = Permission.objects.get_or_create(
-        codename='can_delete_organization',
-        name='Can delete organization',
-        content_type=content_type,
-    )
 
-    view_all_reports_permission, _ = Permission.objects.get_or_create(
-        codename='can_view_all_reports',
-        name='Can view all organization reports',
-        content_type=content_type,
-    )
+def _clear_perm_cache(user):
+    for attr in ('_perm_cache', '_user_perm_cache', '_group_perm_cache'):
+        if hasattr(user, attr):
+            delattr(user, attr)
 
-    # Create Organization Admin group
-    admin_group, created = Group.objects.get_or_create(name=ORG_ADMIN_GROUP)
-    if created or admin_group.permissions.count() == 0:
-        admin_group.permissions.set([
-            invite_permission,
-            manage_org_permission,
-            delete_org_permission,
-            view_all_reports_permission,
-        ])
 
-    # Create Organization Member group
-    member_group, _ = Group.objects.get_or_create(name=ORG_MEMBER_GROUP)
-    # Members have no special permissions by default
+# ---------------------------------------------------------------------------
+# Reading and changing roles
+# ---------------------------------------------------------------------------
 
-    return admin_group, member_group
+def get_user_roles(user):
+    """Return the set of role keys (OWNER, ORG_ADMIN, ...) the user holds."""
+    if not user or not getattr(user, 'pk', None):
+        return set()
+    names = user.groups.filter(name__in=GROUP_ROLES.keys()).values_list('name', flat=True)
+    return {GROUP_ROLES[n] for n in names}
+
+
+def role_labels(roles):
+    """Ordered human-readable labels for a set of role keys."""
+    return [ROLE_LABELS[r] for r in ROLE_ORDER if r in roles]
+
+
+def set_user_roles(user, roles):
+    """
+    Make `roles` the user's exact set of roles.
+
+    - Owner always brings Organization Admin with it.
+    - Every user stays in the Member group.
+    - is_staff mirrors Organization Admin (historical behaviour).
+    - profile.can_create_cycles_for_others mirrors the ability to manage cycles.
+
+    Returns (old_roles, new_roles).
+    """
+    ensure_permission_groups()
+    roles = set(roles)
+    unknown = roles - set(ROLE_GROUPS)
+    if unknown:
+        raise ValueError(f'Unknown role(s): {", ".join(sorted(unknown))}')
+    if OWNER in roles:
+        roles.add(ORG_ADMIN)
+
+    with transaction.atomic():
+        old_roles = get_user_roles(user)
+        role_groups = Group.objects.filter(name__in=ROLE_GROUPS.values())
+        user.groups.remove(*role_groups)
+        user.groups.add(*Group.objects.filter(name__in=[ROLE_GROUPS[r] for r in roles]))
+        user.groups.add(Group.objects.get(name=ORG_MEMBER_GROUP))
+
+        is_admin = ORG_ADMIN in roles
+        if user.is_staff != is_admin:
+            user.is_staff = is_admin
+            user.save(update_fields=['is_staff'])
+
+        try:
+            profile = UserProfile.objects.get(user=user)
+        except UserProfile.DoesNotExist:
+            profile = None
+        if profile is not None:
+            can_cycles = bool(roles & {ORG_ADMIN, CYCLE_MANAGER})
+            if profile.can_create_cycles_for_others != can_cycles:
+                profile.can_create_cycles_for_others = can_cycles
+                profile.save(update_fields=['can_create_cycles_for_others'])
+
+    _clear_perm_cache(user)
+    return old_roles, roles
+
+
+def add_user_roles(user, *roles):
+    return set_user_roles(user, get_user_roles(user) | set(roles))
+
+
+def assign_organization_owner(user):
+    """Make the user an Owner (and therefore Organization Admin), keeping other roles."""
+    return add_user_roles(user, OWNER, ORG_ADMIN)
 
 
 def assign_organization_admin(user):
-    """
-    Assign organization admin permissions to a user.
-
-    This should be called when:
-    - A user signs up through Stripe (becomes org owner)
-    - An admin promotes another user to admin
-
-    Args:
-        user: Django User instance
-    """
-    ensure_permission_groups()
-    admin_group, _ = Group.objects.get_or_create(name=ORG_ADMIN_GROUP)
-
-    # Remove from any org group first so role changes are clean
-    remove_from_all_org_groups(user)
-
-    # Add to admin group
-    user.groups.add(admin_group)
-
-    # Set is_staff flag for backward compatibility
-    user.is_staff = True
-    user.save()
-
-    # Set can_create_cycles_for_others flag
-    if hasattr(user, 'profile'):
-        user.profile.can_create_cycles_for_others = True
-        user.profile.save()
+    """Add the Organization Admin role, keeping any other roles."""
+    return add_user_roles(user, ORG_ADMIN)
 
 
 def assign_organization_member(user, can_create_cycles_for_others=False):
     """
-    Assign organization member permissions to a user.
+    Reset the user to a plain Member, optionally with the Cycle Manager role.
 
-    This should be called when:
-    - A user accepts an invitation
-    - A new team member is added
-    - An admin is demoted to member
-
-    Args:
-        user: Django User instance
-        can_create_cycles_for_others: Whether member can create cycles for others
+    Used when someone joins from an invitation. Owners keep ownership — use
+    transfer_ownership() to change that.
     """
-    ensure_permission_groups()
-    member_group, _ = Group.objects.get_or_create(name=ORG_MEMBER_GROUP)
-
-    # Remove from any org group first — otherwise demoting an admin leaves
-    # them in ORG_ADMIN_GROUP and they keep all admin permissions.
-    remove_from_all_org_groups(user)
-
-    # Add to member group
-    user.groups.add(member_group)
-
-    # Ensure is_staff is False (not an admin)
-    user.is_staff = False
-    user.save()
-
-    # Set can_create_cycles_for_others flag
-    if hasattr(user, 'profile'):
-        user.profile.can_create_cycles_for_others = can_create_cycles_for_others
-        user.profile.save()
+    roles = {CYCLE_MANAGER} if can_create_cycles_for_others else set()
+    if OWNER in get_user_roles(user):
+        roles |= {OWNER, ORG_ADMIN}
+    return set_user_roles(user, roles)
 
 
 def remove_from_all_org_groups(user):
-    """Remove user from all organization groups (without deleting the groups)."""
-    admin_group = Group.objects.filter(name=ORG_ADMIN_GROUP).first()
-    member_group = Group.objects.filter(name=ORG_MEMBER_GROUP).first()
-    if admin_group:
-        user.groups.remove(admin_group)
-    if member_group:
-        user.groups.remove(member_group)
+    """Remove user from all role and member groups (without deleting the groups)."""
+    user.groups.remove(*Group.objects.filter(
+        name__in=list(ROLE_GROUPS.values()) + [ORG_MEMBER_GROUP]
+    ))
+    _clear_perm_cache(user)
 
 
-def organization_admin_required(view_func=None, redirect_url='admin_dashboard'):
+def get_organization_owner(organization):
+    """The User who owns the organization, or None."""
+    profile = (
+        UserProfile.objects.filter(
+            organization=organization, user__groups__name=ORG_OWNER_GROUP
+        )
+        .select_related('user')
+        .order_by('user__date_joined')
+        .first()
+    )
+    return profile.user if profile else None
+
+
+def transfer_ownership(organization, from_user, to_user):
     """
-    Decorator to ensure user is an organization admin.
-
-    Usage:
-        @login_required
-        @organization_admin_required
-        def my_view(request):
-            ...
-
-    Or with custom redirect:
-        @login_required
-        @organization_admin_required(redirect_url='home')
-        def my_view(request):
-            ...
+    Move the Owner role from `from_user` to `to_user` (same organization).
+    The previous owner stays an Organization Admin.
     """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(request, *args, **kwargs):
-            # Check if user has permission
-            if not request.user.has_perm('accounts.can_invite_members'):
-                messages.error(
-                    request,
-                    'You do not have permission to perform this action. '
-                    'Only organization administrators can access this feature.'
-                )
-                return redirect(redirect_url)
-
-            return func(request, *args, **kwargs)
-        return wrapper
-
-    # Handle both @organization_admin_required and @organization_admin_required()
-    if view_func is None:
-        return decorator
-    else:
-        return decorator(view_func)
+    if from_user.pk == to_user.pk:
+        raise ValueError('You already own this organization.')
+    if not UserProfile.objects.filter(user=to_user, organization=organization).exists():
+        raise ValueError('The new owner must be a member of this organization.')
+    if not to_user.is_active:
+        raise ValueError('The new owner must have an active account.')
+    with transaction.atomic():
+        from_roles = get_user_roles(from_user)
+        set_user_roles(from_user, (from_roles - {OWNER}) | {ORG_ADMIN})
+        add_user_roles(to_user, OWNER, ORG_ADMIN)
 
 
-def can_manage_organization_required(view_func=None, redirect_url='admin_dashboard'):
-    """
-    Decorator to ensure user can manage organization settings.
+# ---------------------------------------------------------------------------
+# Permission checks
+# ---------------------------------------------------------------------------
 
-    Usage:
-        @login_required
-        @can_manage_organization_required
-        def settings_view(request):
-            ...
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(request, *args, **kwargs):
-            if not request.user.has_perm('accounts.can_manage_organization'):
-                messages.error(
-                    request,
-                    'You do not have permission to manage organization settings.'
-                )
-                return redirect(redirect_url)
-
-            return func(request, *args, **kwargs)
-        return wrapper
-
-    if view_func is None:
-        return decorator
-    else:
-        return decorator(view_func)
-
-
-def can_delete_organization_required(view_func=None, redirect_url='admin_dashboard'):
-    """
-    Decorator to ensure user can delete the organization.
-
-    Usage:
-        @login_required
-        @can_delete_organization_required
-        def delete_org_view(request):
-            ...
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(request, *args, **kwargs):
-            if not request.user.has_perm('accounts.can_delete_organization'):
-                messages.error(
-                    request,
-                    'Only organization administrators can delete the organization.'
-                )
-                return redirect(redirect_url)
-
-            return func(request, *args, **kwargs)
-        return wrapper
-
-    if view_func is None:
-        return decorator
-    else:
-        return decorator(view_func)
+def is_owner(user):
+    return user.has_perm('accounts.can_transfer_ownership')
 
 
 def is_organization_admin(user):
-    """
-    Check if user is an organization admin.
-
-    Args:
-        user: Django User instance
-
-    Returns:
-        bool: True if user is admin, False otherwise
-    """
-    return user.has_perm('accounts.can_invite_members')
+    """Organization Admin (settings and team management)."""
+    return user.has_perm('accounts.can_manage_organization')
 
 
 def can_invite_members(user):
-    """Check if user can invite team members."""
     return user.has_perm('accounts.can_invite_members')
 
 
 def can_manage_organization(user):
-    """Check if user can manage organization settings."""
     return user.has_perm('accounts.can_manage_organization')
 
 
 def can_delete_organization(user):
-    """Check if user can delete the organization."""
     return user.has_perm('accounts.can_delete_organization')
 
 
-def can_view_all_reports(user):
-    """
-    Check if user can view all organization reports.
+def can_manage_billing(user):
+    return user.has_perm('accounts.can_manage_billing')
 
-    can_manage_organization also counts: admin accounts that predate the
-    can_view_all_reports permission may only carry the former.
-    """
-    return (user.has_perm('accounts.can_view_all_reports')
-            or user.has_perm('accounts.can_manage_organization'))
+
+def can_manage_cycles(user):
+    """Create and run review cycles for anyone (Cycle Manager or Org Admin)."""
+    return user.has_perm('accounts.can_manage_cycles')
+
+
+def can_view_all_reports(user):
+    """Report Viewer: may read the report content for any reviewee."""
+    return user.has_perm('accounts.can_view_all_reports')
+
+
+def can_investigate_responses(user):
+    """Report Viewer: may see which reviewer gave which answers."""
+    return user.has_perm('accounts.can_investigate_responses')
+
+
+def can_view_audit_log(user):
+    return user.has_perm('accounts.can_view_audit_log')
+
+
+def requires_mfa(user):
+    """Accounts holding admin or report-viewing permissions must use MFA."""
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    return any(user.has_perm(p) for p in PRIVILEGED_PERMISSIONS)
+
+
+def _own_filter(user, queryset, email_field):
+    if not user.email:
+        return queryset.none()
+    return queryset.filter(**{f'{email_field}__iexact': user.email})
 
 
 def visible_cycles(user, queryset, email_field='reviewee__email'):
     """
-    Restrict a ReviewCycle (or Report) queryset to what this user may see.
+    Restrict a ReviewCycle queryset to the cycles this user may see and run
+    (status, progress, invitations) — NOT the report content; use
+    visible_reports() / can_view_cycle_report() for that.
 
-    Org admins see everything in their organization; everyone else only sees
-    cycles where they are the reviewee. Reviewees are matched by email because
-    there is no FK from Reviewee to User.
+    Cycle Managers, Organization Admins and Report Viewers see every cycle in
+    their organization; everyone else only sees cycles where they are the
+    reviewee (matched by email — there is no FK from Reviewee to User).
 
-    Organization scoping is a separate concern and must already be applied —
-    this narrows within an organization, it does not isolate between them.
+    Organization scoping is a separate concern and must already be applied.
+    """
+    if not getattr(user, 'is_authenticated', False):
+        return queryset.none()
+    if can_manage_cycles(user) or can_view_all_reports(user):
+        return queryset
+    return _own_filter(user, queryset, email_field)
 
-    Args:
-        email_field: path from the queryset's model to the reviewee email
-            ('reviewee__email' for ReviewCycle, 'cycle__reviewee__email' for Report)
+
+def visible_reports(user, queryset, email_field='cycle__reviewee__email'):
+    """
+    Restrict a Report queryset (or any queryset whose rows expose report
+    content) to what this user may read: everything for Report Viewers, their
+    own reports for everyone else.
     """
     if not getattr(user, 'is_authenticated', False):
         return queryset.none()
     if can_view_all_reports(user):
         return queryset
-    if not user.email:
-        return queryset.none()
-    return queryset.filter(**{f'{email_field}__iexact': user.email})
+    return _own_filter(user, queryset, email_field)
+
+
+def is_own_cycle(user, cycle):
+    """Reviewees are matched by email — there is no FK from Reviewee to User."""
+    return bool(user.email) and cycle.reviewee.email.lower() == user.email.lower()
+
+
+def can_view_cycle_report(user, cycle):
+    return can_view_all_reports(user) or is_own_cycle(user, cycle)
+
+
+# ---------------------------------------------------------------------------
+# View decorators
+# ---------------------------------------------------------------------------
+
+def _permission_required(perm, message, default_redirect='admin_dashboard'):
+    def factory(view_func=None, redirect_url=default_redirect):
+        def decorator(func):
+            @wraps(func)
+            def wrapper(request, *args, **kwargs):
+                if not request.user.has_perm(perm):
+                    messages.error(request, message)
+                    return redirect(redirect_url)
+                return func(request, *args, **kwargs)
+            return wrapper
+        if view_func is None:
+            return decorator
+        return decorator(view_func)
+    return factory
+
+
+organization_admin_required = _permission_required(
+    'accounts.can_invite_members',
+    'You do not have permission to perform this action. '
+    'Only organization administrators can access this feature.',
+)
+can_manage_organization_required = _permission_required(
+    'accounts.can_manage_organization',
+    'You do not have permission to manage organization settings.',
+)
+can_delete_organization_required = _permission_required(
+    'accounts.can_delete_organization',
+    'Only the organization owner can delete the organization.',
+)
+can_manage_billing_required = _permission_required(
+    'accounts.can_manage_billing',
+    'Only the organization owner can manage billing.',
+)

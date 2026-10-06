@@ -1,0 +1,100 @@
+{% extends "admin_dashboard/base.html" %}
+
+{% block title %}Investigation - {{ cycle.reviewee.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Reviewer identities</h1>
+        <p class="page-description">
+            360 feedback for <strong>{{ cycle.reviewee.name }}</strong> ({{ cycle.questionnaire.name }}, {{ cycle.created_at|date:"d M Y" }})
+        </p>
+    </div>
+    <div>
+        <a href="{% url 'reports:view_report' cycle.uuid %}" class="btn btn-secondary">Back to report</a>
+    </div>
+</div>
+
+{% if not revealed %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Investigation access</h2>
+    </div>
+    <div class="card-body">
+        <p>
+            Reviewers were told their feedback is confidential. Only open this for a formal matter, such as a complaint,
+            a misconduct or safety concern, or a legal request, and only look at what you need.
+        </p>
+        <p style="color: var(--text-secondary); font-size: 0.875rem;">
+            Your name, the time, and your reason will be recorded in the audit log, which the organization owner can see.
+            Reviewers who joined through a shared link, rather than an email invitation, can't be identified.
+        </p>
+
+        <form method="post" style="margin-top: 1.5rem;">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="reason" class="form-label">Reason for access (required)</label>
+                <textarea id="reason" name="reason" class="form-control" rows="4" required minlength="{{ min_reason_length }}"
+                          placeholder="e.g. Formal complaint about a comment in this review, raised by the reviewee on 3 Oct.">{{ reason }}</textarea>
+            </div>
+            <div class="form-group">
+                <label for="reference" class="form-label">Case or reference number (optional)</label>
+                <input type="text" id="reference" name="reference" class="form-control" maxlength="100" value="{{ reference }}">
+            </div>
+            <div class="form-check" style="margin: 1rem 0;">
+                <input type="checkbox" id="confirm" name="confirm" class="form-check-input" required>
+                <label for="confirm" style="display: inline; font-weight: normal;">
+                    I need reviewer identities for this matter and will handle them confidentially.
+                </label>
+            </div>
+            <button type="submit" class="btn btn-danger">Show reviewer identities</button>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-warning">
+    This access has been recorded in the audit log. Don't copy, screenshot or forward these details unless the investigation needs them.
+    Leaving or reloading the page hides them again.
+</div>
+
+{% for reviewer in reviewers %}
+<div class="card mb-2">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <h2 class="card-title" style="margin: 0;">
+            {% if reviewer.email %}{{ reviewer.email }}{% else %}<span style="color: var(--text-secondary);">Not identifiable (joined through a shared link)</span>{% endif %}
+        </h2>
+        <div>
+            <span class="badge badge-info">{{ reviewer.category }}</span>
+            {% if reviewer.completed_at %}
+            <span style="font-size: 0.8125rem; color: var(--text-secondary); margin-left: 0.5rem;">Submitted {{ reviewer.completed_at|date:"d M Y H:i" }}</span>
+            {% else %}
+            <span style="font-size: 0.8125rem; color: var(--text-secondary); margin-left: 0.5rem;">Not submitted (draft answers)</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr><th style="width: 45%;">Question</th><th>Answer</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in reviewer.answers %}
+                    <tr>
+                        <td>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">{{ item.section }}</div>
+                            {{ item.question }}
+                        </td>
+                        <td style="white-space: pre-wrap;">{{ item.answer|default_if_none:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% empty %}
+<div class="card"><div class="card-body"><p style="text-align: center; color: var(--text-secondary);">No responses have been recorded for this cycle.</p></div></div>
+{% endfor %}
+{% endif %}
+{% endblock %}

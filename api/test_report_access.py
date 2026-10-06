@@ -81,13 +81,34 @@ class ReportApiAccessControlTest(TestCase):
         uuids = {c['uuid'] for c in response.data['results']}
         self.assertIn(str(self.cycle.uuid), uuids)
 
-    def test_admin_can_see_all_reports(self):
+    def test_report_viewer_can_see_all_reports(self):
+        from accounts.permissions import add_user_roles, REPORT_VIEWER
+        add_user_roles(self.admin, REPORT_VIEWER)
         self.client.force_login(self.admin)
 
         response = self.client.get('/api/v1/reports/')
 
         uuids = {r['uuid'] for r in response.data['results']}
         self.assertIn(str(self.report.uuid), uuids)
+
+    def test_org_admin_without_report_viewer_cannot_see_reports(self):
+        # Organization Admins manage settings and the team, not report content.
+        self.client.force_login(self.admin)
+
+        response = self.client.get('/api/v1/reports/')
+        uuids = {r['uuid'] for r in response.data['results']}
+        self.assertNotIn(str(self.report.uuid), uuids)
+
+        response = self.client.get(f'/api/v1/reports/{self.report.uuid}/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_org_admin_still_sees_cycle_progress(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get('/api/v1/cycles/')
+
+        uuids = {c['uuid'] for c in response.data['results']}
+        self.assertIn(str(self.cycle.uuid), uuids)
 
     def test_api_token_of_non_admin_creator_cannot_read_others_reports(self):
         """Token auth runs as the token's creator — the same rule must hold."""

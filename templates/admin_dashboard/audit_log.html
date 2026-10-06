@@ -1,0 +1,93 @@
+{% extends "admin_dashboard/base.html" %}
+
+{% block title %}Audit Log{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Audit Log</h1>
+        <p class="page-description">Who did what, and when: role changes, report access, investigations, exports, deletions, settings and sign-ins. Entries can't be edited.</p>
+    </div>
+</div>
+
+<div class="card mb-2">
+    <div class="card-body">
+        <form method="get" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+            <div class="form-group" style="margin: 0; min-width: 220px;">
+                <label for="action" class="form-label">Activity</label>
+                <select id="action" name="action" class="form-control">
+                    {% for value, label in action_groups %}
+                    <option value="{{ value }}" {% if value == action %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="margin: 0; min-width: 220px;">
+                <label for="actor" class="form-label">Person (email contains)</label>
+                <input type="text" id="actor" name="actor" value="{{ actor }}" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-primary">Filter</button>
+            {% if action or actor %}<a href="{% url 'audit_log' %}" class="btn btn-secondary">Clear</a>{% endif %}
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Activity ({{ entries.paginator.count }})</h2>
+    </div>
+    <div class="card-body">
+        {% if entries %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>Who</th>
+                        <th>What</th>
+                        <th>About</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ entry.created_at|date:"d M Y H:i" }}</td>
+                        <td>{{ entry.actor_email|default:"System" }}{% if entry.ip_address %}<br><small style="color: var(--text-secondary);">{{ entry.ip_address }}</small>{% endif %}</td>
+                        <td>
+                            {% if entry.action == 'report.reviewer_identities_viewed' %}
+                            <span class="badge" style="background: #dc2626; color: white;">{{ entry.action_label }}</span>
+                            {% else %}
+                            {{ entry.action_label }}
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.target_label }}</td>
+                        <td style="font-size: 0.8125rem; color: var(--text-secondary); max-width: 420px;">
+                            {% for key, value in entry.details.items %}
+                            <div><strong>{{ key }}:</strong> {{ value }}</div>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No activity recorded yet.</p>
+        {% endif %}
+    </div>
+
+    {% if entries.has_other_pages %}
+    <div class="card-footer" style="display: flex; justify-content: flex-end;">
+        <div class="pagination">
+            {% if entries.has_previous %}
+            <a href="?page={{ entries.previous_page_number }}&action={{ action|urlencode }}&actor={{ actor|urlencode }}" class="pagination-link">Previous</a>
+            {% endif %}
+            <span class="pagination-info">Page {{ entries.number }} of {{ entries.paginator.num_pages }}</span>
+            {% if entries.has_next %}
+            <a href="?page={{ entries.next_page_number }}&action={{ action|urlencode }}&actor={{ actor|urlencode }}" class="pagination-link">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
