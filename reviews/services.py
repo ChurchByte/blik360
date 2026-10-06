@@ -8,8 +8,11 @@ from django.conf import settings
 from django.urls import reverse
 from core.email import send_email
 from datetime import timedelta
+import logging
 from django.db.models import Q
 from .models import ReviewCycle, ReviewerToken
+
+logger = logging.getLogger(__name__)
 
 
 def assign_tokens_to_emails(cycle, email_assignments):
@@ -267,6 +270,14 @@ def send_reviewee_notifications(cycle, request=None):
 
     except Exception as e:
         stats['errors'].append(f"Failed to send invitation links email: {str(e)}")
+
+    # This usually runs from transaction.on_commit, where the return value is
+    # discarded — log failures so they aren't silently lost.
+    for error in stats['errors']:
+        logger.error('Reviewee notification for cycle %s: %s', cycle.uuid, error)
+    if stats['sent']:
+        logger.info('Sent %d reviewee notification email(s) for cycle %s to %s',
+                    stats['sent'], cycle.uuid, cycle.reviewee.email)
 
     return stats
 
