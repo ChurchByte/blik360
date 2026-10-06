@@ -1,5 +1,5 @@
 """
-DRF ViewSets for Blik API.
+DRF ViewSets for Lead360 API.
 
 These viewsets provide CRUD operations for all models with proper
 organization scoping and permission checks.
@@ -773,7 +773,7 @@ class WebhookEndpointViewSet(viewsets.ModelViewSet):
         send_webhook(
             organization=endpoint.organization,
             event_type="test.event",
-            payload={"message": "Test webhook from Blik API", "timestamp": timezone.now().isoformat()},
+            payload={"message": "Test webhook from Lead360 API", "timestamp": timezone.now().isoformat()},
         )
 
         return Response({"message": "Test webhook sent"})

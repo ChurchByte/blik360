@@ -60,7 +60,7 @@ python manage.py setup_superuser
 
 echo ""
 echo "========================================="
-echo "Blik is ready!"
+echo "Lead360 is ready!"
 echo "========================================="
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ]; then
   echo "Admin username: $DJANGO_SUPERUSER_USERNAME"

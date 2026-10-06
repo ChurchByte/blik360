@@ -1,6 +1,6 @@
 # Testing Documentation
 
-Zero-configuration Docker-based testing for Blik360.
+Zero-configuration Docker-based testing for Lead360.
 
 ## Quick Start
 

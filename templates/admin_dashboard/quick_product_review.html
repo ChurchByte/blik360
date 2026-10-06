@@ -46,7 +46,7 @@
             </div>
 
             <div class="form-group">
-                <label class="form-label" for="rating">How would you rate Blik? *</label>
+                <label class="form-label" for="rating">How would you rate Lead360? *</label>
                 <select id="rating" name="rating" class="form-control" required style="font-size: 1.1em;">
                     <option value="">Select your rating...</option>
                     <option value="5" {% if existing_review.rating == 5 %}selected{% endif %}>★★★★★ Excellent - Exceeded expectations</option>
@@ -79,7 +79,7 @@
                     name="review_text"
                     class="form-control"
                     rows="8"
-                    placeholder="Tell us about your experience with Blik. What do you like? What could be improved? How has it helped your team?"
+                    placeholder="Tell us about your experience with Lead360. What do you like? What could be improved? How has it helped your team?"
                     required
                 >{{ existing_review.review_text|default:'' }}</textarea>
                 <small class="form-text">Share details about what you liked, disliked, or found helpful</small>
@@ -106,8 +106,8 @@
     <div class="card-body">
         <h3 style="margin: 0 0 1rem 0; font-size: 1rem;">Why we ask for reviews</h3>
         <ul style="margin: 0; padding-left: 1.5rem; color: #64748b; line-height: 1.8;">
-            <li>Your feedback helps us improve Blik for everyone</li>
-            <li>Reviews help other teams decide if Blik is right for them</li>
+            <li>Your feedback helps us improve Lead360 for everyone</li>
+            <li>Reviews help other teams decide if Lead360 is right for them</li>
             <li>Verified customer reviews improve our search visibility</li>
             <li>We read every review and use them to prioritize features</li>
         </ul>

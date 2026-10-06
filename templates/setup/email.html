@@ -1,27 +1,27 @@
 {% extends "setup/base.html" %}
 
-{% block title %}Email Configuration - Blik Setup{% endblock %}
+{% block title %}Email Configuration - Lead360 Setup{% endblock %}
 
 {% block subtitle %}Configure email settings for sending invitations{% endblock %}
 
 {% block content %}
 <h2 class="page-title">Email Configuration</h2>
 <p class="page-description">
-    Choose how Blik will send emails for review invitations and notifications.
+    Choose how Lead360 will send emails for review invitations and notifications.
 </p>
 
 {% if has_subscription %}
 <div class="info-card">
-    <h3>✨ Recommended: Use Blik's Email Service</h3>
+    <h3>✨ Recommended: Use Lead360's Email Service</h3>
     <p>
-        As a SaaS customer, you can use Blik's managed email service. All emails will be sent reliably with no configuration needed.
+        As a SaaS customer, you can use Lead360's managed email service. All emails will be sent reliably with no configuration needed.
         You can always switch to your own SMTP server later in settings.
     </p>
     <form method="post" style="margin: 0;">
         {% csrf_token %}
         <input type="hidden" name="use_blik_mailer" value="true">
         <button type="submit" class="btn btn-primary" style="margin: 0;">
-            Use Blik's Email Service (Recommended)
+            Use Lead360's Email Service (Recommended)
         </button>
     </form>
 </div>

@@ -1,5 +1,5 @@
 """
-DRF Serializers for Blik API.
+DRF Serializers for Lead360 API.
 
 These serializers handle conversion between model instances and JSON,
 with organization scoping and anonymity preservation.

@@ -69,7 +69,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'drf_spectacular_sidecar',
     'django_filters',
-    # Blik apps
+    # Lead360 apps (Python package names retained from upstream Blik)
     'core',
     'accounts',
     'questionnaires',
@@ -116,6 +116,7 @@ TEMPLATES = [
                 'landing.context_processors.organization_metadata',
                 'blik.context_processors.stripe_settings',
                 'blik.context_processors.branding',
+                'blik.context_processors.product_info',
             ],
         },
     },
@@ -273,10 +274,25 @@ MFA_MAX_ATTEMPTS = 5
 MFA_REMEMBER_DAYS = 30
 
 # Organization settings
-ORGANIZATION_NAME = env('ORGANIZATION_NAME', default='Blik')
+ORGANIZATION_NAME = env('ORGANIZATION_NAME', default='Lead360')
 
 # SEO settings
-SITE_NAME = 'Blik360'
+SITE_NAME = 'Lead360'
+
+# Product identity & attribution.
+# Lead360 is a ChurchByte product: a modified version of Blik
+# (https://github.com/thijsdezoete/blik) by Thijs de Zoete, licensed under AGPL-3.0.
+# AGPL-3.0 section 13 requires offering users the Corresponding Source, so
+# PRODUCT_SOURCE_URL must point at the public repository of the running code.
+PRODUCT_NAME = 'Lead360'
+PRODUCT_COMPANY = 'ChurchByte'
+PRODUCT_COMPANY_URL = env('PRODUCT_COMPANY_URL', default='https://github.com/ChurchByte')
+PRODUCT_SOURCE_URL = env('PRODUCT_SOURCE_URL', default='https://github.com/ChurchByte/blik360')
+UPSTREAM_NAME = 'Blik'
+UPSTREAM_AUTHOR = 'Thijs de Zoete'
+UPSTREAM_URL = 'https://github.com/thijsdezoete/blik'
+LICENSE_NAME = 'GNU Affero General Public License v3.0'
+LICENSE_SPDX = 'AGPL-3.0'
 SITE_DOMAIN = env('SITE_DOMAIN', default='localhost:8000' if DEBUG else 'blik360.com')
 SITE_PROTOCOL = env('SITE_PROTOCOL', default='http' if DEBUG else 'https')
 SITE_DESCRIPTION = 'Open source 360-degree feedback and performance review platform. Anonymous, secure, and easy to deploy.'
@@ -399,7 +415,7 @@ REST_FRAMEWORK = {
 
 # drf-spectacular settings for OpenAPI docs
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Blik API',
+    'TITLE': 'Lead360 API',
     'DESCRIPTION': 'REST API for 360-degree feedback management and performance reviews',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,

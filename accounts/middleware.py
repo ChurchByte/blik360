@@ -22,6 +22,7 @@ class MFAMiddleware:
         '/static/',
         '/media/',
         '/health/',
+        '/license/',
         '/feedback/',
         '/favicon',
         '/branding/',

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Complete screenshot generation workflow for Blik
+# Complete screenshot generation workflow for Lead360
 # Generates demo data, captures screenshots, and optimizes images
 
 set -e  # Exit on error
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "=========================================="
-echo "Blik Screenshot Generation Workflow"
+echo "Lead360 Screenshot Generation Workflow"
 echo "=========================================="
 echo ""
 

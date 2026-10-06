@@ -82,11 +82,11 @@
                         {% if organization.has_logo %}
                             <img src="{{ organization.get_logo_url }}" alt="{{ organization.name }} logo">
                         {% else %}
-                            <span class="logo-preview-default">Blik</span>
+                            <span class="logo-preview-default">Lead360</span>
                         {% endif %}
                     </div>
                     <small class="help-text">
-                        {% if organization.has_logo %}Your logo replaces the Blik name in the site header, and appears on the login, feedback and report pages and at the top of emails.{% else %}Using the default Blik branding. Upload a logo to show it in the site header, on the login, feedback and report pages, and at the top of emails.{% endif %}
+                        {% if organization.has_logo %}Your logo replaces the Lead360 name in the site header, and appears on the login, feedback and report pages and at the top of emails.{% else %}Using the default Lead360 branding. Upload a logo to show it in the site header, on the login, feedback and report pages, and at the top of emails.{% endif %}
                     </small>
                 </div>
 
@@ -106,7 +106,7 @@
                     </div>
                 </form>
                 {% if organization.has_logo %}
-                <form id="remove-logo-form" method="post" action="{% url 'remove_logo' %}" style="display: none;" onsubmit="return confirm('Remove the custom logo and revert to the default Blik branding?');">
+                <form id="remove-logo-form" method="post" action="{% url 'remove_logo' %}" style="display: none;" onsubmit="return confirm('Remove the custom logo and revert to the default Lead360 branding?');">
                     {% csrf_token %}
                 </form>
                 {% endif %}
@@ -121,11 +121,11 @@
                             <img src="{{ organization.get_favicon_url }}" alt="{{ organization.name }} favicon" width="32" height="32">
                             <img src="{{ organization.get_favicon_url }}" alt="" width="16" height="16">
                         {% else %}
-                            <svg width="32" height="32" viewBox="0 0 100 100" aria-label="Default Blik icon"><circle cx="50" cy="50" r="40" fill="#4f46e5"/><circle cx="50" cy="50" r="25" fill="none" stroke="white" stroke-width="3"/></svg>
+                            <svg width="32" height="32" viewBox="0 0 100 100" aria-label="Default Lead360 icon"><circle cx="50" cy="50" r="40" fill="#4f46e5"/><circle cx="50" cy="50" r="25" fill="none" stroke="white" stroke-width="3"/></svg>
                         {% endif %}
                     </div>
                     <small class="help-text">
-                        {% if organization.has_favicon %}Your icon is shown in browser tabs and bookmarks across the app.{% else %}Using the default Blik icon in browser tabs and bookmarks.{% endif %}
+                        {% if organization.has_favicon %}Your icon is shown in browser tabs and bookmarks across the app.{% else %}Using the default Lead360 icon in browser tabs and bookmarks.{% endif %}
                     </small>
                 </div>
 
@@ -145,7 +145,7 @@
                     </div>
                 </form>
                 {% if organization.has_favicon %}
-                <form id="remove-favicon-form" method="post" action="{% url 'remove_favicon' %}" style="display: none;" onsubmit="return confirm('Remove the custom favicon and revert to the default Blik icon?');">
+                <form id="remove-favicon-form" method="post" action="{% url 'remove_favicon' %}" style="display: none;" onsubmit="return confirm('Remove the custom favicon and revert to the default Lead360 icon?');">
                     {% csrf_token %}
                 </form>
                 {% endif %}
@@ -338,7 +338,7 @@
                 <div class="card-body">
                     {% if subscription %}
                     <div class="alert alert-info" style="margin-bottom: 1rem; padding: 12px; font-size: 0.875rem;">
-                        <strong>✨ Using Blik's Email Service?</strong>
+                        <strong>✨ Using Lead360's Email Service?</strong>
                         <p style="margin: 8px 0 0 0;">
                             Leave all fields empty to use our managed email service. Fill in to use your own SMTP.
                         </p>

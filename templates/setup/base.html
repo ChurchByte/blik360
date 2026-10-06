@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Setup Wizard - Blik{% endblock %}</title>
+    <title>{% block title %}Setup Wizard - Lead360{% endblock %}</title>
 
     <!-- Favicon -->
     {% include "components/favicon.html" %}
@@ -38,7 +38,7 @@
 <body class="setup-page">
     <div class="setup-container">
         <div class="header">
-            <h1>Blik Setup Wizard</h1>
+            <h1>Lead360 Setup Wizard</h1>
             <p>{% block subtitle %}Let's get your 360 feedback system ready{% endblock %}</p>
 
             {% if step and total_steps %}
@@ -63,5 +63,6 @@
             {% block content %}{% endblock %}
         </div>
     </div>
+{% include "components/site_footer.html" with on_brand=True %}
 </body>
 </html>

@@ -10,7 +10,7 @@ from core.managers import OrganizationManager
 
 class ProductReview(TimeStampedModel):
     """
-    Customer reviews of the Blik platform for displaying on landing pages.
+    Customer reviews of the Lead360 platform for displaying on landing pages.
     These reviews feed into JSON-LD structured data for SEO.
     """
 

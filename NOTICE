@@ -1,0 +1,30 @@
+Lead360
+A ChurchByte product
+https://github.com/ChurchByte/blik360
+
+Lead360 is a modified version of Blik, an open-source 360-degree feedback
+platform created by Thijs de Zoete and contributors:
+    https://github.com/thijsdezoete/blik
+
+This is NOT the original Blik software. ChurchByte began modifying Blik in
+September 2026 (including renaming it to Lead360); the dated history of all
+modifications is recorded in this repository's commit history.
+
+Original work:   Blik, by Thijs de Zoete and contributors
+Modifications:   Copyright (C) 2026 ChurchByte
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program (see the LICENSE file). If not, see
+<https://www.gnu.org/licenses/>.
+
+Internal identifiers retained from Blik for compatibility (the `blik` Python
+package/settings module and the `X-Blik-*` webhook headers) are not branding.

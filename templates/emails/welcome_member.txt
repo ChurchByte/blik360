@@ -22,7 +22,7 @@ While you're here, here's something interesting about feedback and growth:
 
 {{ fact_content|striptags }}
 
-Blik uses the Dreyfus Model as a framework for understanding skill development—from Novice to Expert. We believe it's a powerful tool for tracking your growth journey. Learn more: {{ dreyfus_url }}
+Lead360 uses the Dreyfus Model as a framework for understanding skill development—from Novice to Expert. We believe it's a powerful tool for tracking your growth journey. Learn more: {{ dreyfus_url }}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

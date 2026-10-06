@@ -1,6 +1,9 @@
 """
-Core views for Blik application
+Core views for Lead360 application
 """
+from functools import lru_cache
+
+from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 
@@ -29,3 +32,23 @@ def handler404(request, exception):
 def handler500(request):
     """Custom 500 error handler"""
     return render(request, 'landing/500.html', status=500)
+
+
+@lru_cache(maxsize=1)
+def _license_text():
+    """Full AGPL-3.0 text from the LICENSE file shipped with the source."""
+    try:
+        return (settings.BASE_DIR / 'LICENSE').read_text(encoding='utf-8')
+    except OSError:
+        return ''
+
+
+def license_page(request):
+    """
+    Public License & Credits page (linked from every page footer).
+
+    Credits the original Blik authors, states that Lead360 is a modified
+    version of Blik, links to the Corresponding Source (AGPL-3.0 s.13) and
+    displays the full license text (AGPL-3.0 "Appropriate Legal Notices").
+    """
+    return render(request, 'license.html', {'license_text': _license_text()})

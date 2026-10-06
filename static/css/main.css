@@ -1,4 +1,4 @@
-/* Blik - Centralized CSS System
+/* Lead360 - Centralized CSS System
  * Shadcn-inspired design system with zero noise, maximum signal
  */
 
@@ -208,6 +208,7 @@ body {
 body.setup-page {
     background: var(--primary-600);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 20px;

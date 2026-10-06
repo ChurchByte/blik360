@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Blik 360 Feedback{% endblock %}</title>
+    <title>{% block title %}Lead360{% endblock %}</title>
 
     <!-- Favicon -->
     {% include "components/favicon.html" %}
@@ -41,5 +41,6 @@
     <div class="public-brand"><img src="{{ brand_logo_url }}" alt="{{ brand_name }}" class="public-brand-logo"></div>
     {% endif %}{% endblock %}
     {% block content %}{% endblock %}
+{% include "components/site_footer.html" with on_brand=True %}
 </body>
 </html>

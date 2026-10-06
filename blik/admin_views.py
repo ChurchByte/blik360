@@ -1,5 +1,5 @@
 """
-Admin dashboard views for Blik
+Admin dashboard views for Lead360
 """
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
@@ -2542,7 +2542,7 @@ def product_review_list(request):
 
     org = request.organization
 
-    # Get all product reviews (not org-scoped - these are reviews of Blik as a product)
+    # Get all product reviews (not org-scoped - these are reviews of Lead360 as a product)
     # Use .all() to explicitly avoid any organization filtering from the manager
     reviews_qs = ProductReview.objects.all().filter(is_active=True)
 
