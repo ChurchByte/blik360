@@ -44,7 +44,9 @@
 {% endif %}
 
 {# Dreyfus Model Skill Profile - Comprehensive view with visualization and development plan #}
+{% if report.cycle.questionnaire.dreyfus_enabled %}
 {% include "reports/_dreyfus_profile.html" with insights=report.report_data.insights %}
+{% endif %}
 
 {% if report.report_data.insights.perception_gaps %}
 <div id="perception-gaps">

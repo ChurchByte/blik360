@@ -61,6 +61,20 @@
                     </label>
                 </div>
 
+                <div class="form-group" style="margin-top: 1rem; margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input
+                            type="checkbox"
+                            name="dreyfus_enabled"
+                            {% if not questionnaire or questionnaire.dreyfus_enabled %}checked{% endif %}
+                        >
+                        <span>Enable Dreyfus (Skill + Agency) profiling</span>
+                    </label>
+                    <small style="color: var(--text-secondary); font-size: 0.875rem; display: block; margin-top: 0.25rem; margin-left: 1.5rem;">
+                        When off, Dreyfus/Agency settings are hidden in the builder and the Dreyfus profile is left out of reports. Existing question weights are kept, so you can turn it back on later.
+                    </small>
+                </div>
+
                 <div style="display: flex; gap: 1rem; margin-top: 2rem;">
                     {% if questionnaire %}
                     <button type="submit" class="btn btn-primary">Update Information</button>
@@ -518,6 +532,7 @@ Strongly Agree</textarea>
                                 </label>
                             </div>
 
+                            {% if questionnaire.dreyfus_enabled %}
                             <!-- Dreyfus/Agency Configuration (Optional) -->
                             <details style="margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 0.5rem;">
                                 <summary style="cursor: pointer; font-weight: 600; color: var(--primary); margin-bottom: 1rem;">
@@ -572,6 +587,7 @@ Strongly Agree</textarea>
                                     </div>
                                 </div>
                             </details>
+                            {% endif %}
 
                             <button type="submit" class="btn btn-sm btn-primary" style="margin-top: 1rem;">Add Question</button>
 
