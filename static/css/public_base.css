@@ -9,6 +9,24 @@ body {
     padding: 20px;
 }
 
+/* Stack the custom logo above the page card */
+body:has(> .public-brand) {
+    flex-direction: column;
+}
+
+body > .public-brand {
+    padding: 0 0 1.5rem;
+}
+
+/* White chip so any logo stays legible on the coloured background */
+body > .public-brand .public-brand-logo {
+    background: #ffffff;
+    padding: 0.625rem 1rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-sizing: content-box;
+}
+
 /* Auth containers */
 .login-container,
 .register-container {

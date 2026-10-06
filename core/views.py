@@ -248,3 +248,31 @@ def setup_complete(request):
         'organization': organization,
         'user': request.user,
     })
+
+
+def organization_brand_image(request, org_id, kind):
+    """Serve an organization's custom logo or favicon.
+
+    Public (no login) because the logo is embedded in emails and on the
+    login, feedback and report pages, and the favicon is requested before
+    login. The URL carries a ?v=<timestamp> version, so responses can be
+    cached long-term; a new upload changes the URL.
+    """
+    from django.http import Http404, HttpResponse
+    from django.utils.http import http_date
+    from .models import OrganizationBrandImage
+
+    image = (
+        OrganizationBrandImage.objects
+        .filter(organization_id=org_id, kind=kind, organization__is_active=True)
+        .first()
+    )
+    if image is None:
+        raise Http404('No image')
+
+    response = HttpResponse(bytes(image.data), content_type=image.content_type)
+    response['Cache-Control'] = 'public, max-age=31536000, immutable' if request.GET.get('v') else 'public, max-age=300'
+    response['Last-Modified'] = http_date(image.updated_at.timestamp())
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Disposition'] = f'inline; filename="{kind}"'
+    return response

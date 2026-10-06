@@ -7,7 +7,7 @@
     <title>{% block title %}Blik 360 Feedback{% endblock %}</title>
 
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%234f46e5'/><circle cx='50' cy='50' r='25' fill='none' stroke='white' stroke-width='3'/></svg>">
+    {% include "components/favicon.html" %}
 
     <link rel="stylesheet" href="{% static 'css/main.css' %}">
     <link rel="stylesheet" href="{% static 'css/public_base.css' %}">
@@ -37,6 +37,9 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {% block brand_logo %}{% if brand_logo_url %}
+    <div class="public-brand"><img src="{{ brand_logo_url }}" alt="{{ brand_name }}" class="public-brand-logo"></div>
+    {% endif %}{% endblock %}
     {% block content %}{% endblock %}
 </body>
 </html>

@@ -7,6 +7,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from . import views, admin_views, seo_views, superuser_views
 from productreviews import api_views as review_api
+from core import views as core_views
 
 # Error handlers
 handler404 = 'blik.views.handler404'
@@ -17,6 +18,7 @@ urlpatterns = [
     path('health/', views.health_check, name='health_check'),
     path('sitemap.xml', seo_views.sitemap, name='sitemap'),
     path('robots.txt', seo_views.robots, name='robots'),
+    path('branding/<int:org_id>/<str:kind>/', core_views.organization_brand_image, name='organization_brand_image'),
     path('admin/', admin.site.urls),
 
     # Superuser tools
@@ -25,6 +27,10 @@ urlpatterns = [
     # Admin dashboard
     path('dashboard/', admin_views.dashboard, name='admin_dashboard'),
     path('dashboard/settings/', admin_views.settings_view, name='settings'),
+    path('dashboard/settings/logo/', admin_views.update_logo, name='update_logo'),
+    path('dashboard/settings/logo/remove/', admin_views.remove_logo, name='remove_logo'),
+    path('dashboard/settings/favicon/', admin_views.update_favicon, name='update_favicon'),
+    path('dashboard/settings/favicon/remove/', admin_views.remove_favicon, name='remove_favicon'),
     path('dashboard/settings/api-tokens/create/', admin_views.create_api_token, name='create_api_token'),
     path('dashboard/settings/api-tokens/<int:token_id>/update/', admin_views.update_api_token, name='update_api_token'),
     path('dashboard/settings/api-tokens/<int:token_id>/delete/', admin_views.delete_api_token, name='delete_api_token'),

@@ -114,6 +114,7 @@ TEMPLATES = [
                 'landing.context_processors.url_namespace',
                 'landing.context_processors.organization_metadata',
                 'blik.context_processors.stripe_settings',
+                'blik.context_processors.branding',
             ],
         },
     },
