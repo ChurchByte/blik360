@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "components/favicon.html" %}
     <title>{% if is_admin_view %}Feedback Report{% else %}360 Feedback Report{% endif %} - {{ cycle.reviewee.name }}</title>
     <link rel="stylesheet" href="{% static 'css/main.css' %}">
     <link rel="stylesheet" href="{% static 'css/reports.css' %}">
@@ -49,6 +50,9 @@
     <div class="report-container">
         {{ report.report_data.charts|json_script:"chart-data" }}
 
+        {% if brand_logo_url %}
+        <div class="report-brand"><img src="{{ brand_logo_url }}" alt="{{ brand_name }}" class="report-brand-logo"></div>
+        {% endif %}
         <div class="report-header">
             <h1 class="report-title">360 Feedback Report</h1>
             <p class="report-subtitle">{{ cycle.reviewee.name }}</p>

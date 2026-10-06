@@ -317,6 +317,72 @@ body.setup-page {
     text-decoration: none;
 }
 
+/* Custom organization logo (Settings → Branding) */
+.navbar-brand {
+    display: inline-flex;
+    align-items: center;
+}
+
+.navbar-logo {
+    display: block;
+    max-height: 36px;
+    max-width: 200px;
+    width: auto;
+    height: auto;
+}
+
+.public-brand,
+.report-brand {
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 1rem 0;
+}
+
+.public-brand-logo,
+.report-brand-logo {
+    display: block;
+    max-height: 56px;
+    max-width: 240px;
+    width: auto;
+    height: auto;
+}
+
+.logo-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 80px;
+    padding: 1rem;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    background: var(--bg-secondary, transparent);
+}
+
+.logo-preview img {
+    display: block;
+    max-height: 64px;
+    max-width: 100%;
+}
+
+.favicon-preview {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+}
+
+.favicon-preview img {
+    display: block;
+}
+
+.logo-preview-default {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
 .mobile-menu-toggle {
     display: block;
     background: none;
@@ -2204,3 +2270,12 @@ body.setup-page {
     }
 }
 
+
+/* Keep custom logos legible on dark backgrounds */
+[data-theme="dark"] .navbar-logo,
+[data-theme="dark"] .report-brand-logo {
+    background: #ffffff;
+    padding: 4px 8px;
+    border-radius: 6px;
+    box-sizing: content-box;
+}

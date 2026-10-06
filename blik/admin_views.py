@@ -2044,6 +2044,78 @@ def send_report_email(request, cycle_uuid):
 
 
 @login_required
+@require_POST
+def update_logo(request):
+    """Upload a custom logo for the organization."""
+    from django.core.exceptions import ValidationError
+    from core.branding import set_organization_logo
+
+    organization = request.organization
+    if not organization or not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to modify organization settings.')
+        return redirect('settings')
+
+    try:
+        set_organization_logo(organization, request.FILES.get('logo'))
+        messages.success(request, 'Logo updated. It now appears in the site header and at the top of emails.')
+    except ValidationError as e:
+        messages.error(request, ' '.join(e.messages))
+    return redirect(f"{reverse('settings')}#branding")
+
+
+@login_required
+@require_POST
+def remove_logo(request):
+    """Remove the custom logo and revert to the default branding."""
+    from core.branding import clear_organization_logo
+
+    organization = request.organization
+    if not organization or not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to modify organization settings.')
+        return redirect('settings')
+
+    clear_organization_logo(organization)
+    messages.success(request, 'Logo removed. The default branding has been restored.')
+    return redirect(f"{reverse('settings')}#branding")
+
+
+@login_required
+@require_POST
+def update_favicon(request):
+    """Upload a custom favicon (browser-tab icon) for the organization."""
+    from django.core.exceptions import ValidationError
+    from core.branding import set_organization_favicon
+
+    organization = request.organization
+    if not organization or not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to modify organization settings.')
+        return redirect('settings')
+
+    try:
+        set_organization_favicon(organization, request.FILES.get('favicon'))
+        messages.success(request, 'Favicon updated. You may need to refresh for your browser tab to show it.')
+    except ValidationError as e:
+        messages.error(request, ' '.join(e.messages))
+    return redirect(f"{reverse('settings')}#branding")
+
+
+@login_required
+@require_POST
+def remove_favicon(request):
+    """Remove the custom favicon and revert to the default icon."""
+    from core.branding import clear_organization_favicon
+
+    organization = request.organization
+    if not organization or not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to modify organization settings.')
+        return redirect('settings')
+
+    clear_organization_favicon(organization)
+    messages.success(request, 'Favicon removed. The default icon has been restored.')
+    return redirect(f"{reverse('settings')}#branding")
+
+
+@login_required
 def settings_view(request):
     """Organization and SMTP settings page"""
     # Use the organization from the middleware (set based on user's profile)

@@ -45,6 +45,12 @@ class Organization(TimeStampedModel):
         help_text='By default, new users can create cycles for others (not just themselves)'
     )
 
+    # Branding — the image bytes live in OrganizationBrandImage so they are
+    # not loaded on every Organization query; these timestamps double as the
+    # "has an image" flags and the cache-busting versions for the image URLs.
+    logo_updated_at = models.DateTimeField(blank=True, null=True)
+    favicon_updated_at = models.DateTimeField(blank=True, null=True)
+
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -91,6 +97,35 @@ class Organization(TimeStampedModel):
         return None
 
     @property
+    def has_logo(self):
+        return self.logo_updated_at is not None
+
+    @property
+    def has_favicon(self):
+        return self.favicon_updated_at is not None
+
+    def _brand_image_url(self, kind, updated_at):
+        if updated_at is None:
+            return ''
+        from django.urls import reverse
+        return f"{reverse('organization_brand_image', args=[self.pk, kind])}?v={int(updated_at.timestamp())}"
+
+    def get_logo_url(self):
+        """Site-relative URL of the custom logo, or '' if none is set."""
+        return self._brand_image_url('logo', self.logo_updated_at)
+
+    def get_favicon_url(self):
+        """Site-relative URL of the custom favicon, or '' if none is set."""
+        return self._brand_image_url('favicon', self.favicon_updated_at)
+
+    def get_absolute_logo_url(self):
+        """Absolute logo URL for use in emails, or '' if none is set."""
+        url = self.get_logo_url()
+        if not url:
+            return ''
+        return f'{settings.SITE_PROTOCOL}://{settings.SITE_DOMAIN}{url}'
+
+    @property
     def smtp_password(self):
         """Backward compatibility property"""
         return self.get_smtp_password()
@@ -99,6 +134,39 @@ class Organization(TimeStampedModel):
     def smtp_password(self, value):
         """Backward compatibility setter"""
         self.set_smtp_password(value)
+
+
+class OrganizationBrandImage(models.Model):
+    """Custom branding image (logo or favicon) for an organization.
+
+    Stored in the database rather than MEDIA_ROOT so it survives container
+    rebuilds without needing a media volume, and can be served at a stable
+    public URL (emails need an absolute, publicly reachable image URL).
+    """
+    LOGO = 'logo'
+    FAVICON = 'favicon'
+    KIND_CHOICES = [(LOGO, 'Logo'), (FAVICON, 'Favicon')]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='brand_images',
+    )
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    data = models.BinaryField()
+    content_type = models.CharField(max_length=50)
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'organization_brand_images'
+        constraints = [
+            models.UniqueConstraint(fields=['organization', 'kind'], name='unique_brand_image_per_kind'),
+        ]
+
+    def __str__(self):
+        return f'{self.get_kind_display()} for {self.organization}'
 
 
 class WelcomeEmailFact(TimeStampedModel):

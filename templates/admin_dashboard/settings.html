@@ -70,6 +70,89 @@
             </form>
         </div>
 
+        <!-- Branding -->
+        <div class="card" id="branding">
+            <div class="card-header">
+                <h2 class="card-title">Branding</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label">Logo</label>
+                    <div class="logo-preview">
+                        {% if organization.has_logo %}
+                            <img src="{{ organization.get_logo_url }}" alt="{{ organization.name }} logo">
+                        {% else %}
+                            <span class="logo-preview-default">Blik</span>
+                        {% endif %}
+                    </div>
+                    <small class="help-text">
+                        {% if organization.has_logo %}Your logo replaces the Blik name in the site header, and appears on the login, feedback and report pages and at the top of emails.{% else %}Using the default Blik branding. Upload a logo to show it in the site header, on the login, feedback and report pages, and at the top of emails.{% endif %}
+                    </small>
+                </div>
+
+                {% if perms.accounts.can_manage_organization %}
+                <form method="post" action="{% url 'update_logo' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label class="form-label" for="logo">Upload new logo</label>
+                        <input type="file" id="logo" name="logo" class="form-control" accept="image/png,image/jpeg,image/gif,image/webp" required>
+                        <small class="help-text">PNG with a transparent background works best. JPG, GIF and WebP are also accepted (max 2&nbsp;MB). Wide logos look best; it is shown up to 36px tall in the header and 64px tall in emails.</small>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <button type="submit" class="btn btn-primary btn-sm">Upload Logo</button>
+                        {% if organization.has_logo %}
+                        <button type="submit" form="remove-logo-form" class="btn btn-secondary btn-sm">Remove Logo</button>
+                        {% endif %}
+                    </div>
+                </form>
+                {% if organization.has_logo %}
+                <form id="remove-logo-form" method="post" action="{% url 'remove_logo' %}" style="display: none;" onsubmit="return confirm('Remove the custom logo and revert to the default Blik branding?');">
+                    {% csrf_token %}
+                </form>
+                {% endif %}
+                {% endif %}
+
+                <hr style="border: none; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
+                <div class="form-group">
+                    <label class="form-label">Favicon</label>
+                    <div class="favicon-preview">
+                        {% if organization.has_favicon %}
+                            <img src="{{ organization.get_favicon_url }}" alt="{{ organization.name }} favicon" width="32" height="32">
+                            <img src="{{ organization.get_favicon_url }}" alt="" width="16" height="16">
+                        {% else %}
+                            <svg width="32" height="32" viewBox="0 0 100 100" aria-label="Default Blik icon"><circle cx="50" cy="50" r="40" fill="#4f46e5"/><circle cx="50" cy="50" r="25" fill="none" stroke="white" stroke-width="3"/></svg>
+                        {% endif %}
+                    </div>
+                    <small class="help-text">
+                        {% if organization.has_favicon %}Your icon is shown in browser tabs and bookmarks across the app.{% else %}Using the default Blik icon in browser tabs and bookmarks.{% endif %}
+                    </small>
+                </div>
+
+                {% if perms.accounts.can_manage_organization %}
+                <form method="post" action="{% url 'update_favicon' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label class="form-label" for="favicon">Upload new favicon</label>
+                        <input type="file" id="favicon" name="favicon" class="form-control" accept="image/png,image/jpeg,image/gif,image/webp" required>
+                        <small class="help-text">Use a simple square icon (at least 64&times;64, ideally 256&times;256) — PNG with a transparent background works best. Non-square images are padded, not cropped.</small>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <button type="submit" class="btn btn-primary btn-sm">Upload Favicon</button>
+                        {% if organization.has_favicon %}
+                        <button type="submit" form="remove-favicon-form" class="btn btn-secondary btn-sm">Remove Favicon</button>
+                        {% endif %}
+                    </div>
+                </form>
+                {% if organization.has_favicon %}
+                <form id="remove-favicon-form" method="post" action="{% url 'remove_favicon' %}" style="display: none;" onsubmit="return confirm('Remove the custom favicon and revert to the default Blik icon?');">
+                    {% csrf_token %}
+                </form>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
         <!-- Report Settings -->
         <div class="card">
             <div class="card-header">
