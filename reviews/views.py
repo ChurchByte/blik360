@@ -87,8 +87,8 @@ def feedback_form(request, token):
 
     cycle = reviewer_token.cycle
 
-    # Check if the cycle is closed/completed
-    if cycle.status == 'completed':
+    # Check if the cycle is closed/completed/archived
+    if cycle.status != 'active':
         return render(request, 'reviews/claim_error.html', {
             'error': 'This review cycle has been closed. Feedback can no longer be submitted.'
         }, status=410)
@@ -137,8 +137,8 @@ def submit_feedback(request, token):
 
     cycle = reviewer_token.cycle
 
-    # Check if the cycle is closed/completed
-    if cycle.status == 'completed':
+    # Check if the cycle is closed/completed/archived
+    if cycle.status != 'active':
         return JsonResponse({'error': 'This review cycle has been closed. Feedback can no longer be submitted.'}, status=410)
 
     questionnaire = cycle.questionnaire

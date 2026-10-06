@@ -112,7 +112,7 @@ def reviewee_report(request, access_token):
     # Org admins can bypass this check
     can_bypass = (request.user.is_authenticated and
                   request.user.has_perm('accounts.can_manage_organization'))
-    if cycle.status != 'completed' and not can_bypass:
+    if not cycle.was_completed and not can_bypass:
         return render(request, 'reports/report_not_ready.html', {
             'cycle': cycle,
         })

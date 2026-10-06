@@ -376,6 +376,8 @@ class ReviewCycleViewSet(viewsets.ModelViewSet):
 
         if cycle.status == "completed":
             return Response({"error": "Cycle already completed"}, status=status.HTTP_400_BAD_REQUEST)
+        if cycle.status == "archived":
+            return Response({"error": "Cycle is archived"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Generate report
         from reports.services import generate_report
@@ -482,7 +484,7 @@ class ReviewCycleViewSet(viewsets.ModelViewSet):
         if reviewer_token.is_completed:
             return Response({"error": "Responses already submitted"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if cycle.status == 'completed':
+        if cycle.status != 'active':
             return Response(
                 {"error": "This review cycle has been closed"},
                 status=status.HTTP_410_GONE

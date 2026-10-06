@@ -146,6 +146,9 @@ def send_reminder_emails(cycle, token_ids=None):
         'errors': []
     }
 
+    if cycle.status != 'active':
+        return stats
+
     # Get incomplete tokens with emails that have been invited
     tokens = cycle.tokens.filter(
         reviewer_email__isnull=False,

@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                                     </div>
                                                 {% endif %}
 
-                                                {% if cycle_data.cycle.status == 'completed' %}
+                                                {% if cycle_data.cycle.was_completed %}
                                                     <a href="{% url 'reports:reviewee_report' cycle_data.report.access_token %}"
                                                        class="btn btn-sm btn-success" target="_blank">
                                                         View Report
@@ -263,6 +263,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <span class="badge bg-success">Active</span>
                                         {% elif cycle_data.cycle.status == 'completed' %}
                                             <span class="badge bg-info">Completed</span>
+                                        {% elif cycle_data.cycle.status == 'archived' %}
+                                            <span class="badge bg-secondary">Archived</span>
                                         {% endif %}
                                     </div>
                                 </div>
