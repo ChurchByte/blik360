@@ -46,7 +46,8 @@ class PermissionAssignmentTestCase(TestCase):
         self.assertFalse(user.has_perm('accounts.can_invite_members'))
         self.assertFalse(user.is_staff)
 
-    def test_promoting_member_to_admin_removes_member_group(self):
+    def test_promoting_member_to_admin_keeps_member_group(self):
+        # Roles are additive: everyone stays a Member, admins add a role on top.
         assign_organization_member(self.user)
         user = self._reload_user()
         self.assertTrue(user.groups.filter(name=ORG_MEMBER_GROUP).exists())
@@ -54,7 +55,7 @@ class PermissionAssignmentTestCase(TestCase):
         assign_organization_admin(user)
         user = self._reload_user()
 
-        self.assertFalse(user.groups.filter(name=ORG_MEMBER_GROUP).exists())
+        self.assertTrue(user.groups.filter(name=ORG_MEMBER_GROUP).exists())
         self.assertTrue(user.groups.filter(name=ORG_ADMIN_GROUP).exists())
         self.assertTrue(user.has_perm('accounts.can_manage_organization'))
         self.assertTrue(user.is_staff)

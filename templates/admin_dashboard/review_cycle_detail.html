@@ -88,15 +88,23 @@
         </div>
         {% endif %}
         <div style="display: grid; gap: 1rem;">
+            {% if can_view_report %}
             <a href="{% url 'reports:view_report' cycle.uuid %}" class="btn btn-primary" style="justify-content: center;">
                 <svg style="width: 20px; height: 20px; margin-right: 8px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                View Report (Admin)
+                View Report
             </a>
+            {% else %}
+            <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">
+                Report content is only visible to {{ cycle.reviewee.name }} and to Report Viewers (HR).
+            </p>
+            {% endif %}
             {% if report.access_token %}
+            {% if can_view_report %}
             <a href="{% url 'reports:reviewee_report' report.access_token %}" class="btn btn-secondary" style="justify-content: center;">
                 <svg style="width: 20px; height: 20px; margin-right: 8px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                 View Report (Reviewee View)
             </a>
+            {% endif %}
             <form method="post" action="{% url 'send_report_email' cycle.uuid %}" style="margin: 0;">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-success" style="width: 100%; justify-content: center;">
@@ -372,7 +380,7 @@
                                                 Send Invite
                                             </button>
                                         </form>
-                                        {% if perms.accounts.can_manage_organization %}
+                                        {% if can_manage_cycle %}
                                         <form method="post" action="{% url 'remove_reviewer_token' cycle.uuid token.id %}" style="display: inline; margin: 0;" onsubmit="return confirmRemoveReviewer(this);">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-sm btn-danger" style="white-space: nowrap;">
@@ -389,7 +397,7 @@
                                                 Send Reminder
                                             </button>
                                         </form>
-                                        {% if perms.accounts.can_manage_organization %}
+                                        {% if can_manage_cycle %}
                                         <form method="post" action="{% url 'remove_reviewer_token' cycle.uuid token.id %}" style="display: inline; margin: 0;" onsubmit="return confirmRemoveReviewer(this);">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-sm btn-danger" style="white-space: nowrap;">
@@ -407,7 +415,7 @@
                                     </form>
                                     {% elif not token.reviewer_email and not token.claimed_at and not token.is_completed %}
                                     {# Unclaimed token - show Remove button only to org admins #}
-                                    {% if perms.accounts.can_manage_organization %}
+                                    {% if can_manage_cycle %}
                                     <form method="post" action="{% url 'remove_reviewer_token' cycle.uuid token.id %}" style="display: inline; margin: 0;" onsubmit="return confirmRemoveReviewer(this);">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-sm btn-danger" style="white-space: nowrap;">
@@ -527,7 +535,9 @@ document.addEventListener('DOMContentLoaded', function() {
             {% endif %}
 
             {% if report_exists %}
-            <a href="{% url 'reports:view_report' cycle.uuid %}" class="btn btn-secondary">View Report (Admin)</a>
+            {% if can_view_report %}
+            <a href="{% url 'reports:view_report' cycle.uuid %}" class="btn btn-secondary">View Report</a>
+            {% endif %}
             <a href="{% url 'generate_report' cycle.uuid %}" class="btn btn-secondary">Regenerate Report</a>
             {% else %}
             <a href="{% url 'generate_report' cycle.uuid %}" class="btn btn-secondary">Generate Report</a>
@@ -546,7 +556,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </button>
             </form>
 
-            {% if perms.accounts.can_manage_organization %}
+            {% if can_manage_cycle %}
             <form method="post" action="{% url 'archive_cycle' cycle.uuid %}" style="margin: 0;"
                   onsubmit="return confirm('Archive this cycle? Feedback links will stop working and no report will be generated. You can restore it later.');">
                 {% csrf_token %}
@@ -560,14 +570,14 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 {% else %}
 <!-- Additional Actions for Completed / Archived Cycles -->
-{% if perms.accounts.can_manage_organization or user.is_superuser %}
+{% if can_manage_cycle or user.is_superuser %}
 <div class="card">
     <div class="card-header">
         <h2 class="card-title">Additional Actions</h2>
     </div>
     <div class="card-body">
         <div class="action-grid">
-            {% if not perms.accounts.can_manage_organization %}
+            {% if not can_manage_cycle %}
             {% elif cycle.status == 'archived' %}
             <form method="post" action="{% url 'unarchive_cycle' cycle.uuid %}" style="margin: 0;">
                 {% csrf_token %}

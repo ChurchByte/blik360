@@ -16,7 +16,13 @@ from django.http import HttpResponseRedirect
 from datetime import timedelta
 
 from accounts.models import Reviewee, UserProfile, OrganizationInvitation
-from accounts.permissions import can_view_all_reports, visible_cycles
+from accounts.permissions import (
+    can_manage_cycles,
+    can_view_all_reports,
+    can_view_cycle_report,
+    visible_cycles,
+)
+from core.audit import log_event, Actions
 from reviews.models import ReviewCycle, ReviewerToken
 from reviews.services import assign_tokens_to_emails, send_reviewer_invitations
 from questionnaires.models import Questionnaire
@@ -160,9 +166,18 @@ def team_list(request):
     except EmptyPage:
         users = paginator.page(paginator.num_pages)
 
-    # Add permission data as dynamic attribute
+    # Attach each member's roles for display and for the Manage roles dialog
+    from accounts.permissions import (
+        get_user_roles, role_labels, OWNER, ORG_ADMIN, CYCLE_MANAGER, REPORT_VIEWER,
+    )
     for user_profile in users:
-        user_profile.is_org_admin = user_profile.user.has_perm('accounts.can_manage_organization')
+        roles = get_user_roles(user_profile.user)
+        user_profile.roles = roles
+        user_profile.role_labels = role_labels(roles)
+        user_profile.is_owner = OWNER in roles
+        user_profile.is_org_admin = ORG_ADMIN in roles
+        user_profile.is_cycle_manager = CYCLE_MANAGER in roles
+        user_profile.is_report_viewer = REPORT_VIEWER in roles
 
     # Get pending invitations
     invitations = OrganizationInvitation.objects.filter(
@@ -178,6 +193,7 @@ def team_list(request):
         'invitations': invitations,
         'subscription_status': subscription_status,
         'per_page': per_page,
+        'viewer_can_manage_owners': request.user.has_perm('accounts.can_manage_owners'),
     }
 
     return render(request, 'admin_dashboard/team.html', context)
@@ -186,13 +202,19 @@ def team_list(request):
 @login_required
 @require_POST
 def update_user_permissions(request):
-    """Update user permissions and role"""
-    from accounts.permissions import assign_organization_admin, assign_organization_member
-    from django.contrib.auth.models import Group
+    """
+    Change a team member's roles. Owners and Organization Admins can change
+    anyone's roles, including their own. Only Owners can add or remove Owners,
+    and the organization always keeps at least one Owner.
+    """
+    from accounts.permissions import (
+        get_user_roles, set_user_roles, role_labels, count_owners, can_manage_owners,
+        ASSIGNABLE_ROLES, OWNER_ASSIGNABLE_ROLES,
+        OWNER, ORG_ADMIN, CYCLE_MANAGER, REPORT_VIEWER,
+    )
 
-    # Check if requester has permission to manage organization
     if not request.user.has_perm('accounts.can_manage_organization'):
-        messages.error(request, 'You do not have permission to manage user permissions.')
+        messages.error(request, 'You do not have permission to manage user roles.')
         return redirect('team_list')
 
     org = request.organization
@@ -200,63 +222,70 @@ def update_user_permissions(request):
         messages.error(request, 'No organization found.')
         return redirect('admin_dashboard')
 
-    try:
-        user_profile_id = request.POST.get('user_profile_id')
-        role = request.POST.get('role')  # 'admin' or 'member'
-        can_create_cycles_for_others = request.POST.get('can_create_cycles_for_others') == 'on'
+    user_profile_id = request.POST.get('user_profile_id')
+    if not user_profile_id:
+        messages.error(request, 'Invalid request: missing required fields.')
+        return redirect('team_list')
 
-        if not user_profile_id or not role:
-            messages.error(request, 'Invalid request: missing required fields.')
-            return redirect('team_list')
+    user_profile = get_object_or_404(UserProfile, id=user_profile_id, organization=org)
+    target_user = user_profile.user
+    is_self = target_user.id == request.user.id
 
-        # Get the user profile being updated
-        user_profile = get_object_or_404(
-            UserProfile,
-            id=user_profile_id,
-            organization=org
+    if target_user.is_superuser and not is_self:
+        messages.error(request, 'Cannot modify roles for super admins.')
+        return redirect('team_list')
+
+    may_manage_owners = can_manage_owners(request.user)
+    allowed = OWNER_ASSIGNABLE_ROLES if may_manage_owners else ASSIGNABLE_ROLES
+    posted = set(request.POST.getlist('roles'))
+    current = get_user_roles(target_user)
+    requested = {r for r in posted if r in allowed}
+
+    # Organization Admins can't add or remove Owners.
+    if not may_manage_owners and OWNER in current:
+        requested.add(OWNER)
+
+    # An Owner is always an Organization Admin, and Organization Admins can
+    # already run cycles, so the separate Cycle Manager role is dropped for them.
+    if OWNER in requested:
+        requested.add(ORG_ADMIN)
+    if ORG_ADMIN in requested:
+        requested.discard(CYCLE_MANAGER)
+
+    if OWNER in current and OWNER not in requested and count_owners(org) <= 1:
+        messages.error(
+            request,
+            'An organization needs at least one Owner. Make someone else an Owner first.'
         )
-        target_user = user_profile.user
+        return redirect('team_list')
 
-        # Prevent self-demotion or demoting superusers
-        if target_user.id == request.user.id:
-            messages.error(request, 'You cannot modify your own permissions.')
-            return redirect('team_list')
+    old_roles, new_roles = set_user_roles(target_user, requested)
 
-        if target_user.is_superuser:
-            messages.error(request, 'Cannot modify permissions for super admins.')
-            return redirect('team_list')
+    if old_roles == new_roles:
+        messages.info(request, 'No changes made.')
+        return redirect('team_list')
 
-        # Check if this would be the last admin
-        if target_user.has_perm('accounts.can_manage_organization') and role == 'member':
-            # Count users with organization admin permission
-            admin_profiles = UserProfile.objects.filter(organization=org).select_related('user')
-            admin_count = sum(1 for p in admin_profiles if p.user.has_perm('accounts.can_manage_organization'))
+    added = sorted(new_roles - old_roles)
+    removed = sorted(old_roles - new_roles)
+    log_event(
+        request, Actions.ROLES_CHANGED,
+        target=target_user, target_label=target_user.email,
+        details={'added': added, 'removed': removed, 'roles': sorted(new_roles),
+                 'self_change': is_self},
+    )
+    labels = ', '.join(role_labels(new_roles)) or 'Member'
+    who = 'You now have' if is_self else f'{target_user.email} now has'
+    messages.success(request, f'{who}: {labels}.')
+    if REPORT_VIEWER in added:
+        messages.info(
+            request,
+            ('You' if is_self else target_user.email) + ' can now read every report and, for '
+            'investigations, see which reviewer gave which answers.'
+        )
 
-            if admin_count <= 1:
-                messages.error(request, 'Cannot demote the last organization administrator.')
-                return redirect('team_list')
-
-        # Update role and permissions
-        if role == 'admin':
-            assign_organization_admin(target_user)
-            messages.success(request, f'Successfully promoted {target_user.username} to Organization Admin.')
-        else:  # member
-            # Remove admin permissions
-            assign_organization_member(target_user, can_create_cycles_for_others=False)
-            messages.success(request, f'Successfully updated {target_user.username} to Member role.')
-
-        # Update can_create_cycles_for_others permission separately
-        # (this can be set independently of role)
-        user_profile.refresh_from_db()
-        user_profile.can_create_cycles_for_others = can_create_cycles_for_others
-        user_profile.save()
-
-        if can_create_cycles_for_others:
-            messages.success(request, f'{target_user.username} can now create review cycles for others.')
-
-    except Exception as e:
-        messages.error(request, f'Error updating permissions: {str(e)}')
-
+    if is_self and ORG_ADMIN not in new_roles:
+        # They can no longer manage the team.
+        return redirect('admin_dashboard')
     return redirect('team_list')
 
 
@@ -345,8 +374,6 @@ def reviewee_list(request):
 def reviewee_create(request):
     """Create a new reviewee"""
     from subscriptions.utils import check_employee_limit
-    from accounts.permissions import is_organization_admin
-
     if request.method == 'POST':
         name = request.POST.get('name')
         email = request.POST.get('email')
@@ -358,8 +385,8 @@ def reviewee_create(request):
                 messages.error(request, 'No organization found. Please run setup first.')
                 return redirect('admin_dashboard')
 
-            # Non-admins can only create reviewees for themselves
-            if not is_organization_admin(request.user):
+            # Only Cycle Managers / Org Admins can add reviewees other than themselves
+            if not can_manage_cycles(request.user):
                 if email.lower() != request.user.email.lower():
                     messages.error(request, 'You can only create a reviewee profile for yourself.')
                     return redirect('reviewee_list')
@@ -409,11 +436,10 @@ def reviewee_edit(request, reviewee_id):
     """Edit an existing reviewee - admin only"""
     from accounts.permissions import organization_admin_required
 
-    # Check admin permission
-    if not request.user.has_perm('accounts.can_manage_organization'):
+    if not can_manage_cycles(request.user):
         messages.error(
             request,
-            'You do not have permission to edit reviewees. Only organization administrators can access this feature.'
+            'You do not have permission to edit reviewees. Only Cycle Managers and organization administrators can access this feature.'
         )
         return redirect('reviewee_list')
 
@@ -444,11 +470,10 @@ def reviewee_delete(request, reviewee_id):
     """Soft delete a reviewee - admin only"""
     from accounts.permissions import organization_admin_required
 
-    # Check admin permission
-    if not request.user.has_perm('accounts.can_manage_organization'):
+    if not can_manage_cycles(request.user):
         messages.error(
             request,
-            'You do not have permission to delete reviewees. Only organization administrators can access this feature.'
+            'You do not have permission to delete reviewees. Only Cycle Managers and organization administrators can access this feature.'
         )
         return redirect('reviewee_list')
 
@@ -478,11 +503,10 @@ def quick_cycle_create(request, reviewee_id):
     """
     from accounts.permissions import organization_admin_required
 
-    # Check admin permission
-    if not request.user.has_perm('accounts.can_manage_organization'):
+    if not can_manage_cycles(request.user):
         messages.error(
             request,
-            'You do not have permission to create review cycles. Only organization administrators can access this feature.'
+            'You do not have permission to create review cycles for others. Only Cycle Managers and organization administrators can access this feature.'
         )
         return redirect('reviewee_list')
 
@@ -1333,6 +1357,11 @@ def review_cycle_create(request):
                 organization=org
             )
             created_cycles = []
+            may_manage = can_manage_cycles(request.user)
+
+            if creation_mode == 'bulk' and not may_manage:
+                messages.error(request, 'Only Cycle Managers and organization administrators can create cycles for everyone.')
+                return redirect('review_cycle_create')
 
             if creation_mode == 'bulk':
                 # Create cycles for all active reviewees. Intentionally do NOT
@@ -1350,6 +1379,12 @@ def review_cycle_create(request):
                             status='active'
                         )
                         created_cycles.append(cycle)
+
+                log_event(
+                    request, Actions.CYCLE_CREATED,
+                    details={'mode': 'bulk', 'count': len(created_cycles),
+                             'questionnaire': questionnaire.name},
+                )
 
                 # Stash the cycle UUIDs in the session for the send-invitations
                 # confirmation step. Session avoids URL-length limits when the
@@ -1373,6 +1408,10 @@ def review_cycle_create(request):
 
                 reviewee = Reviewee.objects.for_organization(org).get(id=reviewee_id)
 
+                if not may_manage and reviewee.email.lower() != (request.user.email or '').lower():
+                    messages.error(request, 'You can only create review cycles for yourself.')
+                    return redirect('review_cycle_create')
+
                 # Create review cycle (no tokens created here)
                 cycle = ReviewCycle.objects.create(
                     reviewee=reviewee,
@@ -1380,6 +1419,9 @@ def review_cycle_create(request):
                     created_by=request.user,
                     status='active'
                 )
+                log_event(request, Actions.CYCLE_CREATED, target=cycle,
+                          target_label=reviewee.name,
+                          details={'questionnaire': questionnaire.name})
 
                 # Send notification emails to reviewee. Defer to after the
                 # transaction commits so a slow SMTP backend can't stall this
@@ -1467,7 +1509,7 @@ def review_cycle_create(request):
     org = request.organization or (request.user.profile.organization if hasattr(request.user, 'profile') else None)
 
     # Filter reviewees based on user permissions
-    if hasattr(request.user, 'profile') and not request.user.profile.can_create_cycles_for_others:
+    if not can_manage_cycles(request.user):
         # User can only create cycles for themselves
         reviewees = Reviewee.objects.for_organization(org).filter(
             is_active=True,
@@ -1487,7 +1529,7 @@ def review_cycle_create(request):
     context = {
         'reviewees': reviewees,
         'questionnaires': questionnaires,
-        'can_create_for_others': hasattr(request.user, 'profile') and request.user.profile.can_create_cycles_for_others,
+        'can_create_for_others': can_manage_cycles(request.user),
     }
 
     return render(request, 'admin_dashboard/review_cycle_form.html', context)
@@ -1587,6 +1629,10 @@ def review_cycle_detail(request, cycle_uuid):
         'completion_rate': completion_rate,
         'claimed_completion_rate': claimed_completion_rate,
         'report_exists': report_exists,
+        # Org Admins and Cycle Managers run cycles but must not see results,
+        # including the reviewee's tokenised report link.
+        'can_view_report': can_view_cycle_report(request.user, cycle),
+        'can_manage_cycle': can_manage_cycles(request.user),
     }
 
     return render(request, 'admin_dashboard/review_cycle_detail.html', context)
@@ -1601,6 +1647,7 @@ def generate_report_view(request, cycle_uuid):
 
     try:
         report = generate_report(cycle)
+        log_event(request, Actions.REPORT_GENERATED, target=cycle, target_label=cycle.reviewee.name)
 
         # Send notification email to reviewee
         email_stats = send_report_ready_notification(report, request)
@@ -1646,6 +1693,8 @@ def close_cycle(request, cycle_uuid):
     # Mark cycle as completed
     cycle.status = 'completed'
     cycle.save()
+    log_event(request, Actions.CYCLE_CLOSED, target=cycle, target_label=cycle.reviewee.name,
+              details={'unclaimed_tokens_removed': unclaimed_count})
 
     # Generate report
     from reports.services import generate_report, send_report_ready_notification
@@ -1672,7 +1721,7 @@ def archive_cycle(request, cycle_uuid):
     """Archive a cycle in any state. Stops further feedback; keeps all data."""
     cycle = get_cycle_or_404(request, cycle_uuid)
 
-    if not request.user.has_perm('accounts.can_manage_organization'):
+    if not can_manage_cycles(request.user):
         messages.error(request, 'You do not have permission to archive cycles.')
         return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
 
@@ -1680,6 +1729,7 @@ def archive_cycle(request, cycle_uuid):
         messages.info(request, 'This cycle is already archived.')
     else:
         cycle.archive()
+        log_event(request, Actions.CYCLE_ARCHIVED, target=cycle, target_label=cycle.reviewee.name)
         messages.success(request, f'Cycle for {cycle.reviewee.name} archived. Feedback links no longer work.')
 
     return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
@@ -1691,7 +1741,7 @@ def unarchive_cycle(request, cycle_uuid):
     """Restore an archived cycle to its previous status."""
     cycle = get_cycle_or_404(request, cycle_uuid)
 
-    if not request.user.has_perm('accounts.can_manage_organization'):
+    if not can_manage_cycles(request.user):
         messages.error(request, 'You do not have permission to restore cycles.')
         return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
 
@@ -1699,6 +1749,7 @@ def unarchive_cycle(request, cycle_uuid):
         messages.info(request, 'This cycle is not archived.')
     else:
         cycle.unarchive()
+        log_event(request, Actions.CYCLE_RESTORED, target=cycle, target_label=cycle.reviewee.name)
         messages.success(request, f'Cycle restored ({cycle.get_status_display()}).')
 
     return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
@@ -1955,8 +2006,7 @@ def send_individual_reminder(request, cycle_uuid, token_id):
 @require_POST
 def remove_reviewer_token(request, cycle_uuid, token_id):
     """Remove a reviewer token from a cycle (only if not started) - Admin only"""
-    # Check organization admin permission
-    if not request.user.has_perm('accounts.can_manage_organization'):
+    if not can_manage_cycles(request.user):
         messages.error(request, 'You do not have permission to remove reviewers.')
         return redirect('review_cycle_detail', cycle_uuid=cycle_uuid)
 
@@ -1977,6 +2027,8 @@ def remove_reviewer_token(request, cycle_uuid, token_id):
 
         # Delete the token
         token.delete()
+        log_event(request, Actions.REVIEWER_REMOVED, target=cycle, target_label=cycle.reviewee.name,
+                  details={'category': token.category, 'had_email_invite': bool(token.reviewer_email)})
 
         messages.success(request, f'Removed {category} reviewer ({email}) from cycle.')
 
@@ -2035,6 +2087,8 @@ def send_report_email(request, cycle_uuid):
     email_stats = send_report_ready_notification(report, request)
 
     if email_stats['sent'] > 0:
+        log_event(request, Actions.REPORT_EMAILED, target=cycle, target_label=cycle.reviewee.name,
+                  details={'to': cycle.reviewee.email})
         messages.success(request, f'Report email sent to {cycle.reviewee.name} at {cycle.reviewee.email}.')
     else:
         if email_stats['errors']:
@@ -2144,6 +2198,13 @@ def settings_view(request):
 
         # Get which section is being updated
         section = request.POST.get('section', 'all')
+        audited_fields = [
+            'name', 'email', 'allow_registration', 'default_users_can_create_cycles',
+            'min_responses_for_anonymity', 'auto_send_report_email', 'smtp_host',
+            'smtp_port', 'smtp_username', 'smtp_use_tls', 'from_email',
+        ]
+        before = {f: getattr(organization, f, None) for f in audited_fields}
+        old_smtp_password = organization.smtp_password_encrypted
 
         try:
             if section == 'organization':
@@ -2197,6 +2258,16 @@ def settings_view(request):
                 organization.save()
                 messages.success(request, 'Email settings updated successfully.')
 
+            changed = {
+                f: {'from': before[f], 'to': getattr(organization, f, None)}
+                for f in audited_fields if before[f] != getattr(organization, f, None)
+            }
+            if organization.smtp_password_encrypted != old_smtp_password:
+                changed['smtp_password'] = {'from': '***', 'to': '***'}
+            if changed:
+                log_event(request, Actions.SETTINGS_CHANGED, target=organization,
+                          details={'section': section, 'changes': changed})
+
             if locked:
                 messages.info(request, (
                     'Some settings are managed by environment variables and were '
@@ -2221,6 +2292,7 @@ def settings_view(request):
     print(f"DEBUG: Passing subscription to template: {subscription}")
 
     # Check if current user has organization admin permission
+    from accounts.permissions import is_last_owner
     is_org_admin = request.user.has_perm('accounts.can_manage_organization')
 
     # Count total admin users
@@ -2243,6 +2315,7 @@ def settings_view(request):
         'is_org_admin': is_org_admin,
         'admin_count': admin_count,
         'is_last_admin': is_org_admin and admin_count == 1,
+        'is_last_owner': is_last_owner(request.user),
         'api_tokens': api_tokens,
         'webhooks': webhooks,
         'new_token': new_token,
@@ -2378,6 +2451,11 @@ def gdpr_delete_user_view(request, user_id):
             performed_by=request.user
         )
 
+        log_event(request, Actions.USER_DATA_DELETED,
+                  target_label=result.get('username', ''),
+                  details={'user_id': target_user.id, 'deletion_type': deletion_type,
+                           'status': result.get('status')})
+
         if result['status'] == 'deleted':
             messages.success(request, f'User {result["username"]} has been permanently deleted.')
         else:
@@ -2409,6 +2487,9 @@ def gdpr_delete_reviewee_view(request, reviewee_id):
 
         # Get deletion type from POST
         deletion_type = request.POST.get('deletion_type', 'soft')
+
+        log_event(request, Actions.REVIEWEE_DATA_DELETED,
+                  details={'reviewee_id': reviewee.id, 'deletion_type': deletion_type})
 
         if deletion_type == 'full_anonymization':
             # Full anonymization (reviewee + reviewer emails)
@@ -2867,6 +2948,8 @@ def create_api_token(request):
             is_active=is_active
         )
 
+        log_event(request, Actions.API_TOKEN_CREATED, target=token, target_label=name)
+
         # Redirect to settings with token in session (will be displayed in modal)
         request.session['new_api_token'] = token.token
         request.session['new_api_token_name'] = name
@@ -2900,6 +2983,8 @@ def update_api_token(request, token_id):
         token.rate_limit = int(request.POST.get('rate_limit', token.rate_limit))
         token.is_active = request.POST.get('is_active') == 'on'
         token.save()
+        log_event(request, Actions.API_TOKEN_UPDATED, target=token, target_label=token.name,
+                  details={'is_active': token.is_active, 'rate_limit': token.rate_limit})
 
         messages.success(request, 'API token updated successfully.')
     except APIToken.DoesNotExist:
@@ -2930,6 +3015,7 @@ def delete_api_token(request, token_id):
     try:
         token = APIToken.objects.for_organization(org).get(id=token_id)
         token_name = token.name
+        log_event(request, Actions.API_TOKEN_DELETED, target=token, target_label=token_name)
         token.delete()
 
         messages.success(request, f'API token "{token_name}" revoked successfully.')
@@ -2973,6 +3059,8 @@ def create_webhook(request):
             is_active=is_active
         )
 
+        log_event(request, Actions.WEBHOOK_CHANGED, target=webhook, target_label=name,
+                  details={'change': 'created', 'url': url, 'events': events})
         messages.success(request, f'Webhook "{name}" created successfully.')
     except Exception as e:
         messages.error(request, f'Error creating webhook: {str(e)}')
@@ -3005,6 +3093,8 @@ def update_webhook(request, webhook_id):
         webhook.events = request.POST.getlist('events')
         webhook.is_active = request.POST.get('is_active') == 'on'
         webhook.save()
+        log_event(request, Actions.WEBHOOK_CHANGED, target=webhook, target_label=webhook.name,
+                  details={'change': 'updated', 'url': webhook.url, 'events': webhook.events})
 
         messages.success(request, f'Webhook "{webhook.name}" updated successfully.')
     except WebhookEndpoint.DoesNotExist:
@@ -3035,6 +3125,8 @@ def delete_webhook(request, webhook_id):
     try:
         webhook = WebhookEndpoint.objects.for_organization(org).get(id=webhook_id)
         webhook_name = webhook.name
+        log_event(request, Actions.WEBHOOK_CHANGED, target=webhook, target_label=webhook_name,
+                  details={'change': 'deleted'})
         webhook.delete()
 
         messages.success(request, f'Webhook "{webhook_name}" deleted successfully.')
@@ -3044,3 +3136,64 @@ def delete_webhook(request, webhook_id):
         messages.error(request, f'Error deleting webhook: {str(e)}')
 
     return redirect('settings')
+
+
+# ============================================================================
+# Audit log
+# ============================================================================
+
+@login_required
+def audit_log_view(request):
+    """Read-only audit trail for the organization (Owner only)."""
+    from accounts.permissions import can_view_audit_log
+    from core.audit import ACTION_LABELS
+    from core.models import AuditLog
+
+    if not can_view_audit_log(request.user):
+        messages.error(request, 'Only the organization owner can view the audit log.')
+        return redirect('admin_dashboard')
+
+    org = request.organization
+    if not org:
+        messages.error(request, 'No organization found.')
+        return redirect('admin_dashboard')
+
+    entries = AuditLog.objects.filter(organization=org).select_related('actor')
+
+    action = request.GET.get('action', '')
+    if action:
+        if action.endswith('.'):
+            entries = entries.filter(action__startswith=action)
+        else:
+            entries = entries.filter(action=action)
+    actor = request.GET.get('actor', '').strip()
+    if actor:
+        entries = entries.filter(actor_email__icontains=actor)
+
+    paginator = Paginator(entries, 50)
+    try:
+        page = paginator.page(request.GET.get('page') or 1)
+    except (PageNotAnInteger, EmptyPage):
+        page = paginator.page(1)
+
+    for entry in page:
+        entry.action_label = ACTION_LABELS.get(entry.action, entry.action)
+
+    action_groups = [
+        ('', 'All activity'),
+        ('report.', 'Reports & investigations'),
+        ('team.', 'Team & roles'),
+        ('auth.', 'Sign-in'),
+        ('cycle.', 'Review cycles'),
+        ('data.', 'Data exports & deletions'),
+        ('org.', 'Organization settings'),
+        ('api.', 'API & webhooks'),
+        ('billing.', 'Billing'),
+    ]
+
+    return render(request, 'admin_dashboard/audit_log.html', {
+        'entries': page,
+        'action': action,
+        'actor': actor,
+        'action_groups': action_groups,
+    })

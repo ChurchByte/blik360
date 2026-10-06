@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    {% load branding_tags %}{% email_logo %}
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #4f46e5;">Your sign-in code</h1>
+
+        <p>Hi there,</p>
+
+        <p>Use this code to finish signing in to {{ site_name }}:</p>
+
+        <div style="text-align: center; margin: 32px 0;">
+            <span style="display: inline-block; padding: 14px 32px; background-color: #eef2ff; color: #312e81; border-radius: 8px; font-weight: 700; font-size: 32px; letter-spacing: 8px; font-family: 'Courier New', monospace;">{{ code }}</span>
+        </div>
+
+        <p style="font-size: 14px; color: #64748b;">The code expires in {{ minutes }} minutes and can only be used once.</p>
+
+        <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin: 24px 0;">
+            <p style="margin: 0; font-size: 14px; color: #92400e;">
+                <strong>Didn't just try to sign in?</strong> Someone may know your password. Change it straight away and let your administrator know.
+            </p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 40px 0;">
+
+        <p>The {{ site_name }} Team</p>
+
+        <p style="font-size: 12px; color: #94a3b8; margin-top: 32px;">
+            This email was sent to {{ user.email }} because a sign-in was attempted on this account.
+        </p>
+    </div>
+</body>
+</html>

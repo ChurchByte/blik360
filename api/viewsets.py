@@ -13,7 +13,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 
 from accounts.models import Reviewee
-from accounts.permissions import visible_cycles
+from accounts.permissions import visible_cycles, visible_reports, can_view_cycle_report
 from reviews.models import ReviewCycle, ReviewerToken
 from questionnaires.models import Questionnaire
 from reports.models import Report
@@ -36,6 +36,7 @@ from .permissions import (
     IsOrganizationMember,
     CanManageOrganization,
     CanCreateCycles,
+    CanManageCycles,
     CanViewAllReports,
 )
 
@@ -94,10 +95,10 @@ class RevieweeViewSet(viewsets.ModelViewSet):
 
     Permissions:
     - All operations require organization membership
-    - Create/Update/Delete require organization management permission
+    - Requires Cycle Manager or Organization Admin
     """
 
-    permission_classes = [IsOrganizationMember, CanManageOrganization]
+    permission_classes = [IsOrganizationMember, CanManageCycles]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["is_active", "department"]
     search_fields = ["name", "email", "department"]
@@ -276,8 +277,8 @@ class ReviewCycleViewSet(viewsets.ModelViewSet):
 
     Permissions:
     - List/Retrieve: All organization members
-    - Create: Requires can_create_cycles_for_others
-    - Update/Delete: Organization admins only
+    - Create: Cycle Managers and Organization Admins
+    - Update/Delete: Cycle Managers and Organization Admins
     """
 
     permission_classes = [IsOrganizationMember]
@@ -315,7 +316,7 @@ class ReviewCycleViewSet(viewsets.ModelViewSet):
         if self.action == "create":
             return [IsOrganizationMember(), CanCreateCycles()]
         elif self.action in ["update", "partial_update", "destroy"]:
-            return [IsOrganizationMember(), CanManageOrganization()]
+            return [IsOrganizationMember(), CanManageCycles()]
         return [IsOrganizationMember()]
 
     @extend_schema(
@@ -388,13 +389,12 @@ class ReviewCycleViewSet(viewsets.ModelViewSet):
         cycle.status = "completed"
         cycle.save()
 
-        return Response(
-            {
-                "message": "Cycle completed",
-                "report_id": report.id,
-                "report_url": f"/my-report/{report.access_token}/",
-            }
-        )
+        payload = {"message": "Cycle completed", "report_id": report.id}
+        # The tokenised URL opens the report without logging in, so only hand
+        # it to people allowed to read this report.
+        if can_view_cycle_report(request.user, cycle):
+            payload["report_url"] = f"/my-report/{report.access_token}/"
+        return Response(payload)
 
     @extend_schema(
         tags=["cycles"],
@@ -670,7 +670,7 @@ class ReportViewSet(viewsets.ReadOnlyModelViewSet):
         detail view hands out access_token, which is an unauthenticated URL.
         """
         org = self.request.organization
-        return visible_cycles(
+        return visible_reports(
             self.request.user,
             Report.objects.for_organization(org).select_related(
                 "cycle__reviewee", "cycle__questionnaire"
@@ -682,7 +682,7 @@ class ReportViewSet(viewsets.ReadOnlyModelViewSet):
         tags=["reports"],
         description="Regenerate report with updated data",
     )
-    @action(detail=True, methods=["post"], permission_classes=[IsOrganizationMember, CanManageOrganization])
+    @action(detail=True, methods=["post"], permission_classes=[IsOrganizationMember, CanViewAllReports])
     def regenerate(self, request, uuid=None):
         """
         Regenerate report with updated data.

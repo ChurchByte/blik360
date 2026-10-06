@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from core.models import Organization
 from accounts.models import UserProfile, Reviewee
+from accounts.permissions import get_user_roles
 from reviews.models import ReviewCycle, ReviewerToken, Response
 from reports.models import Report
 from questionnaires.models import Questionnaire
@@ -41,6 +42,7 @@ def export_organization_data(organization):
             'email': profile.user.email,
             'is_org_admin': profile.user.has_perm('accounts.can_manage_organization'),
             'can_create_cycles_for_others': profile.can_create_cycles_for_others,
+            'roles': sorted(get_user_roles(profile.user)),
             'created_at': profile.created_at.isoformat(),
         })
 
@@ -134,12 +136,14 @@ def delete_user_account(user):
     if hasattr(user, 'profile'):
         org = user.profile.organization
 
-        # Check if this is the last admin user in the organization
-        admin_profiles = UserProfile.objects.for_organization(org).select_related('user')
-        admin_count = sum(1 for p in admin_profiles if p.user.has_perm('accounts.can_manage_organization'))
-
-        if admin_count == 1 and user.has_perm('accounts.can_manage_organization'):
-            raise ValueError("Cannot delete the last admin user. Delete the organization instead.")
+        # The last Owner must add another Owner first (or delete the
+        # organization), otherwise nobody could manage billing or the audit log.
+        from accounts.permissions import is_last_owner
+        if is_last_owner(user):
+            raise ValueError(
+                "You are the only Owner. Make someone else an Owner on the Team page first, "
+                "or delete the organization instead."
+            )
 
     # Delete user (cascades to profile, tokens, etc.)
     user.delete()

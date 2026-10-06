@@ -28,8 +28,9 @@ class BulkCycleCreationTestCase(TestCase):
         UserProfileFactory(
             user=self.user,
             organization=self.org,
-            can_create_cycles_for_others=True,
         )
+        from accounts.permissions import add_user_roles, CYCLE_MANAGER
+        add_user_roles(self.user, CYCLE_MANAGER)
         self.questionnaire = QuestionnaireFactory(organization=self.org, is_default=True)
         self.reviewees = [
             RevieweeFactory(organization=self.org, name=f'Reviewee {i}')

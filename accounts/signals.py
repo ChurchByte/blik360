@@ -43,3 +43,28 @@ def create_reviewee_from_user(sender, instance, created, **kwargs):
             )
 
 
+
+
+# ---------------------------------------------------------------------------
+# Sign-in auditing and MFA session state
+# ---------------------------------------------------------------------------
+from django.contrib.auth.signals import user_logged_in, user_logged_out  # noqa: E402
+
+
+@receiver(user_logged_in)
+def reset_mfa_and_audit_login(sender, request, user, **kwargs):
+    """A fresh login always starts unverified for MFA purposes."""
+    if request is None:
+        return
+    from accounts.mfa import SESSION_KEY
+    request.session.pop(SESSION_KEY, None)
+    from core.audit import log_event, Actions
+    log_event(request, Actions.LOGIN, actor=user)
+
+
+@receiver(user_logged_out)
+def audit_logout(sender, request, user, **kwargs):
+    if request is None or user is None:
+        return
+    from core.audit import log_event, Actions
+    log_event(request, Actions.LOGOUT, actor=user)

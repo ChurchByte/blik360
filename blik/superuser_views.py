@@ -11,7 +11,7 @@ from django.db import transaction
 from core.models import Organization
 from accounts.models import UserProfile
 from core.email import send_welcome_email
-from accounts.permissions import assign_organization_admin
+from accounts.permissions import assign_organization_owner
 from accounts.services import create_user_with_email_as_username
 
 
@@ -86,8 +86,8 @@ def create_organization(request):
                     can_create_cycles_for_others=True  # Admins can create cycles for others
                 )
 
-                # Assign organization admin permissions
-                assign_organization_admin(user)
+                # The first admin of a new organization is its owner
+                assign_organization_owner(user)
 
                 # Send welcome email with credentials
                 try:

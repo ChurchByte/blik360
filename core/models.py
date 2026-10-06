@@ -213,3 +213,54 @@ class UpgradeStep(models.Model):
     def __str__(self):
         status = 'OK' if self.success else 'FAILED'
         return f'{self.name} [{status}]'
+
+
+class AuditLog(models.Model):
+    """
+    Append-only record of security- and privacy-relevant actions: role
+    changes, report access, investigations into reviewer identities, exports,
+    deletions, settings changes and sign-in events.
+
+    Never store feedback content here. Rows are written through
+    core.audit.log_event() and are not editable once saved.
+    """
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    organization_name = models.CharField(max_length=255, blank=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    # Snapshot so the record still says who acted after the account is gone.
+    actor_email = models.CharField(max_length=254, blank=True)
+    action = models.CharField(max_length=64, db_index=True)
+    target_type = models.CharField(max_length=64, blank=True)
+    target_id = models.CharField(max_length=64, blank=True)
+    target_label = models.CharField(max_length=255, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = 'audit_logs'
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['organization', '-created_at']),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None and not kwargs.pop('_allow_update', False):
+            raise ValueError('Audit log entries cannot be modified.')
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.created_at:%Y-%m-%d %H:%M} {self.actor_email or "system"} {self.action}'

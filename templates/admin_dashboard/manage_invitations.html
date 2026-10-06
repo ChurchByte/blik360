@@ -47,7 +47,7 @@
 
             <div class="form-group" style="margin-bottom: 1.5rem;">
                 <label class="form-label">Self Assessment</label>
-                {% if not user.profile.can_create_cycles_for_others %}
+                {% if not perms.accounts.can_manage_cycles %}
                 <input
                     type="text"
                     name="self_emails"

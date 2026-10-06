@@ -184,12 +184,34 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span>Permissions</span>
                     </div>
                     <div class="small">
-                        {% if profile.can_create_cycles_for_others %}
-                            <span class="badge bg-success">Can create cycles for others</span>
+                        {% for label in role_labels %}
+                            <span class="badge bg-success">{{ label }}</span>
+                        {% empty %}
+                            <span class="badge bg-warning">Member</span>
+                        {% endfor %}
+                    </div>
+
+                    {% if mfa_required or remembered_devices %}
+                    <hr>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Sign-in codes</span>
+                    </div>
+                    <div class="small text-muted mb-2">
+                        {% if mfa_required %}Your account needs a code from your email when you sign in.{% endif %}
+                        {% if remembered_devices %}
+                            {{ remembered_devices }} device{{ remembered_devices|pluralize }} currently skip{{ remembered_devices|pluralize:"s," }} the code.
                         {% else %}
-                            <span class="badge bg-warning">Self cycles only</span>
+                            No devices are remembered.
                         {% endif %}
                     </div>
+                    {% if remembered_devices %}
+                    <form method="post" action="{% url 'mfa_forget_devices' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-secondary w-100">Forget remembered devices</button>
+                    </form>
+                    {% endif %}
+                    {% endif %}
 
                     <hr>
 

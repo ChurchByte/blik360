@@ -51,8 +51,12 @@ def setup_admin(request):
                     'total_steps': 3,
                     'progress_percentage': 33,
                 })
-            # Log the user in with explicit backend
+            # Log the user in with explicit backend. The account was created
+            # with a password in this same request, so treat this session as
+            # MFA-verified — email may not be configured yet at this point.
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            from accounts.mfa import mark_verified
+            mark_verified(request)
             messages.success(request, f'Admin account "{user.email}" created successfully!')
             return redirect('setup_organization')
     else:
@@ -70,6 +74,9 @@ def setup_admin(request):
 @require_http_methods(['GET', 'POST'])
 def setup_organization(request):
     """Step 2: Configure organization details."""
+    if is_setup_complete() and not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'Setup is already complete.')
+        return redirect('admin_dashboard')
     # Check if user already has an organization (e.g., from Stripe signup)
     organization = None
     if hasattr(request.user, 'profile') and request.user.profile.organization:
@@ -94,33 +101,15 @@ def setup_organization(request):
 
             # Create UserProfile for the setup admin if needed
             from accounts.models import UserProfile
-            from django.contrib.auth.models import Permission
-            from django.contrib.contenttypes.models import ContentType
 
             if not hasattr(request.user, 'profile'):
-                profile = UserProfile.objects.create(
+                UserProfile.objects.create(
                     user=request.user,
                     organization=organization,
-                    can_create_cycles_for_others=True
                 )
-
-                # Grant organization management permissions to setup admin
-                try:
-                    content_type = ContentType.objects.get_for_model(UserProfile)
-                    permissions = Permission.objects.filter(
-                        content_type=content_type,
-                        codename__in=[
-                            'can_invite_members',
-                            'can_manage_organization',
-                            'can_view_all_reports',
-                        ]
-                    )
-                    request.user.user_permissions.add(*permissions)
-                except Exception as e:
-                    # Log but don't fail setup if permissions aren't available yet
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.warning(f"Could not assign permissions during setup: {e}")
+                # The person who sets up the instance owns the organization.
+                from accounts.permissions import assign_organization_owner
+                assign_organization_owner(request.user)
 
             messages.success(request, f'Organization "{organization.name}" configured successfully!')
             return redirect('setup_email')
@@ -143,6 +132,9 @@ def setup_organization(request):
 @require_http_methods(['GET', 'POST'])
 def setup_email(request):
     """Step 3: Configure email settings."""
+    if is_setup_complete() and not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'Setup is already complete.')
+        return redirect('admin_dashboard')
     organization = request.organization
     if not organization:
         messages.error(request, 'No organization found. Please complete organization setup first.')

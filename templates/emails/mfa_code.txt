@@ -1,0 +1,17 @@
+Your sign-in code
+=================
+
+Hi there,
+
+Use this code to finish signing in to {{ site_name }}:
+
+    {{ code }}
+
+The code expires in {{ minutes }} minutes and can only be used once.
+
+If you didn't just try to sign in, someone may know your password. Change it straight away and let your administrator know.
+
+The {{ site_name }} Team
+
+---
+This email was sent to {{ user.email }} because a sign-in was attempted on this account.

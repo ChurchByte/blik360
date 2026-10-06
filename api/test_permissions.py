@@ -178,8 +178,8 @@ class CanCreateCyclesPermissionTest(TestCase):
             password='test123'
         )
         UserProfile.objects.create(user=self.creator, organization=self.org)
-        self.creator.profile.can_create_cycles_for_others = True
-        self.creator.profile.save()
+        from accounts.permissions import add_user_roles, CYCLE_MANAGER
+        add_user_roles(self.creator, CYCLE_MANAGER)
 
         # Create user who cannot
         self.user = User.objects.create_user(

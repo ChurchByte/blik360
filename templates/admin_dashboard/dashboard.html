@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             {{ item.cycle.created_at|date:"M d, Y" }}
                         </td>
                         <td>
-                            {% if item.report_exists %}
+                            {% if item.report_exists and perms.accounts.can_view_all_reports or item.report_exists and item.cycle.reviewee.email|lower == user.email|lower %}
                             <a href="{% url 'reports:view_report' item.cycle.uuid %}" class="btn btn-sm btn-primary">View Report</a>
                             {% else %}
                             <a href="{% url 'review_cycle_detail' item.cycle.uuid %}" class="btn btn-sm btn-secondary">View</a>

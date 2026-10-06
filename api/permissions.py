@@ -91,20 +91,11 @@ class CanCreateCycles(BasePermission):
     Checks if user can create cycles for others.
 
     Read operations are allowed for all org members.
-    Write operations require can_create_cycles_for_others flag.
+    Write operations require the can_manage_cycles permission
+    (Cycle Manager or Organization Admin role).
     """
 
     def has_permission(self, request, view):
-        """
-        Check if user can create/modify cycles.
-
-        Args:
-            request: HTTP request object
-            view: DRF view
-
-        Returns:
-            bool: True if user can create cycles
-        """
         # Allow read operations for all authenticated users
         if request.method not in ["POST", "PUT", "PATCH"]:
             return True
@@ -112,11 +103,16 @@ class CanCreateCycles(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
 
-        # Check profile flag
-        try:
-            return request.user.profile.can_create_cycles_for_others
-        except:
+        return request.user.has_perm("accounts.can_manage_cycles")
+
+
+class CanManageCycles(BasePermission):
+    """Requires 'can_manage_cycles' (Cycle Manager or Organization Admin)."""
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
             return False
+        return request.user.has_perm("accounts.can_manage_cycles")
 
 
 class HasAPIPermission(BasePermission):

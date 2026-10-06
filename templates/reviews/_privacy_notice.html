@@ -1,0 +1,31 @@
+{# Collection notice shown to reviewers before they answer (APP 5 / GDPR Art. 13). #}
+<details class="privacy-notice" open style="margin: 0 0 1.5rem; padding: 1rem 1.25rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; background: var(--bg-card, #fff); font-size: 0.875rem; line-height: 1.55;">
+    <summary style="cursor: pointer; font-weight: 600;">Who will see your feedback</summary>
+    <ul style="margin: 0.75rem 0 0; padding-left: 1.25rem;">
+        <li style="margin-bottom: 0.5rem;">
+            <strong>{{ reviewee.name }}</strong> receives a combined report.
+            {% if token.category == 'peer' or token.category == 'direct_report' %}
+            Your answers are grouped with other {{ token.get_category_display|lower }} responses and are only shown once at least {{ min_responses }} people in that group have responded. Written comments appear without your name, so leave out details that would identify you.
+            {% elif token.category == 'manager' %}
+            Manager feedback is shown in its own section, so {{ reviewee.name }} may be able to tell it came from you.
+            {% else %}
+            Your self-assessment is shown alongside other people's feedback.
+            {% endif %}
+        </li>
+        <li style="margin-bottom: 0.5rem;">
+            <strong>HR staff at {{ organization.name }}</strong> can read the full report.
+            {% if token.reviewer_email %}
+            Because you were invited by email, HR can link your answers to your email address, but only for a formal investigation (for example a complaint or a misconduct or safety concern). Every time they do this it is recorded, with a reason.
+            {% else %}
+            You opened a shared link, so your answers aren't linked to your name or email address.
+            {% endif %}
+        </li>
+        <li style="margin-bottom: 0.5rem;">
+            <strong>People who run review cycles</strong> can see whether this form has been completed, but not your answers.
+        </li>
+        <li>
+            Your feedback is used for {{ reviewee.name }}'s development and performance review and kept with {{ organization.name }}'s review records.
+            {% if organization.email %}Questions or requests about your information: <a href="mailto:{{ organization.email }}">{{ organization.email }}</a>.{% endif %}
+        </li>
+    </ul>
+</details>
