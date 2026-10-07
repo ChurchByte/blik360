@@ -3,6 +3,11 @@
 
 <div class="question-report">
     <h3 class="question-title">{{ question_data.question_text }}</h3>
+    {% if question_data.not_observed_count %}
+    <div style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 0.25rem;">
+        {{ question_data.not_observed_count }} reviewer{{ question_data.not_observed_count|pluralize }} selected &ldquo;Unable to observe&rdquo; (excluded from results)
+    </div>
+    {% endif %}
 
     {# Show preview of how the question was presented #}
     <div style="margin: 1rem 0; padding: 1rem; background: var(--bg-light); border-radius: 6px; border-left: 3px solid var(--primary);">

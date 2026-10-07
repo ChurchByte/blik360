@@ -195,7 +195,9 @@ def investigate_responses(request, cycle_uuid):
         by_token = {}
         for r in responses:
             value = (r.answer_data or {}).get('value')
-            if isinstance(value, list):
+            if (r.answer_data or {}).get('not_observed'):
+                value = 'Unable to observe'
+            elif isinstance(value, list):
                 value = ', '.join(str(v) for v in value)
             by_token.setdefault(r.token_id, []).append({
                 'section': r.question.section.title,

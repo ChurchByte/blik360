@@ -505,13 +505,19 @@ class ReviewCycleViewSet(viewsets.ModelViewSet):
 
             question = question_dict[question_uuid]
 
+            # "Unable to observe" is stored as a marker and excluded from results
+            if resp_data.get('not_observed') and reviewer_token.category != 'self':
+                answer_data = {'value': None, 'not_observed': True}
+            else:
+                answer_data = {'value': value}
+
             # Create response with answer_data
             response = QuestionResponse.objects.create(
                 cycle=cycle,
                 question=question,
                 token=reviewer_token,
                 category=reviewer_token.category,
-                answer_data={'value': value}
+                answer_data=answer_data
             )
             created_responses.append(response)
 
