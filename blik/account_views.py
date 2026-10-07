@@ -97,18 +97,19 @@ def export_data(request):
     """Export all organization data as JSON.
 
     The export contains every response and report, so it needs both
-    Organization Admin and Report Viewer access.
+    Organization Admin and Report Viewer access for all campuses.
     """
     org = request.organization
     if not org:
         return JsonResponse({'error': 'Organization not found'}, status=404)
 
+    from accounts.permissions import can_view_all_reports
     if not (request.user.has_perm('accounts.can_manage_organization')
-            and request.user.has_perm('accounts.can_view_all_reports')):
+            and can_view_all_reports(request.user)):
         messages.error(
             request,
-            'Exporting all data requires both the Organization Admin and Report Viewer roles, '
-            'because the export includes every response and report.'
+            'Exporting all data requires both the Organization Admin role and the Report '
+            'Viewer role for all campuses, because the export includes every response and report.'
         )
         return redirect('settings')
 

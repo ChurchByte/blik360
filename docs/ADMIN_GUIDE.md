@@ -90,15 +90,15 @@ Everyone in an organization is a **Member**. Extra roles are assigned on the
 | **Owner** (one or more per organization) | Billing, deleting the organization, adding and removing Owners, the **Audit Log**. Always also an Organization Admin. |
 | **Organization Admin** | Settings, team and roles, invitations, reviewees, API tokens and webhooks, GDPR deletions, and running review cycles for anyone. **No access to report content.** |
 | **Cycle Manager** | Creates and runs review cycles for anyone and sees completion progress, but **not results**. |
-| **Report Viewer** (HR only) | Reads every report. For a formal investigation, can see which invited reviewer gave which answers. |
+| **Report Viewer** (HR only) | Reads reports for reviewees in their campuses (or every report with **Select All**). For a formal investigation, can see which invited reviewer gave which answers. |
 | **Member** | Their own cycles and their own reports. |
 
 | | Owner / Org Admin | Cycle Manager | Report Viewer | Member |
 |---|---|---|---|---|
-| Cycles list, detail, progress | All | All | All | Own only |
-| Report content | Only if also Report Viewer | No | All | Own only |
-| Reviewer identities (investigation) | Only if also Report Viewer | No | Yes, with a recorded reason | No |
-| Full data export | Only if also Report Viewer | No | No | No |
+| Cycles list, detail, progress | All | All | Their campuses + own | Own only |
+| Report content | Only if also Report Viewer | No | Their campuses + own | Own only |
+| Reviewer identities (investigation) | Only if also Report Viewer | No | Their campuses, with a recorded reason | No |
+| Full data export | Only if also Report Viewer for all campuses | No | No | No |
 | Sign-in code by email (MFA) | Required | — | Required | — |
 
 **Changing roles.** Owners and Organization Admins change roles with **Manage
@@ -107,6 +107,21 @@ Owner or remove the Owner role. Whoever set up the instance (or signed up) is
 the first Owner; an organization can have several, but always at least one, so
 the last Owner can't remove their own Owner role or delete their account until
 someone else is an Owner. Every role change is recorded in the audit log.
+
+**Campuses.** Organization Admins manage the list of campuses under
+**Settings → Campuses** (add, rename, delete). Each reviewee can be assigned to
+one or more campuses on the reviewee form. When you give someone the Report
+Viewer role, **Manage roles** shows a checkbox per campus plus **Select All**:
+
+- **Select All** — every report, including reviewees with no campus and any
+  campus added later. Existing Report Viewers were given this when campuses
+  were introduced.
+- **Individual campuses** — only reports for reviewees assigned to at least one
+  ticked campus. Reviewees with no campus are not visible to them.
+- **Nothing ticked** — only their own report.
+
+Deleting a campus removes it from its reviewees and from Report Viewers limited
+to it. Campus changes and campus scope changes are recorded in the audit log.
 
 **Report Viewers and reviewer identities.** Reviewers invited by email are linked
 to their answers through their invitation. A Report Viewer can open **Investigation:
@@ -165,7 +180,7 @@ would see in the dashboard.
    - **Name** - Full name of the person being reviewed
    - **Email** - Email for notifications (self-assessment link, report ready)
    - **Department** (optional) - Organizational unit
-   - **Position** (optional) - Job title
+   - **Campus** (optional) - Tick every campus they belong to (shown once campuses exist in Settings)
 3. Click **Create Reviewee**
 
 ### Editing Reviewees

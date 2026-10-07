@@ -24,6 +24,8 @@ class RevieweeSerializer(serializers.ModelSerializer):
     Organization is auto-set from request context.
     """
 
+    campuses = serializers.SlugRelatedField(many=True, slug_field="name", read_only=True)
+
     class Meta:
         model = Reviewee
         fields = [
@@ -31,6 +33,7 @@ class RevieweeSerializer(serializers.ModelSerializer):
             "name",
             "email",
             "department",
+            "campuses",
             "is_active",
             "created_at",
             "updated_at",

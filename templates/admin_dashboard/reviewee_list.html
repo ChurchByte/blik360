@@ -30,6 +30,7 @@
                 <tr>
                     <th>Name</th>
                     <th>Email</th>
+                    {% if has_campuses %}<th>Campus</th>{% endif %}
                     <th>Questionnaire</th>
                     <th>Review Cycles</th>
                     <th style="text-align: right;">Actions</th>
@@ -42,7 +43,7 @@
                         {% if item.active_cycle %}
                             <a href="{% url 'review_cycle_detail' item.active_cycle.uuid %}" class="reviewee-name-link">{{ item.reviewee.name }}</a>
                         {% elif item.latest_completed_report %}
-                            {% if perms.accounts.can_view_all_reports or item.reviewee.email|lower == user.email|lower %}
+                            {% if item.can_view_report %}
                             <a href="{% url 'reports:view_report' item.latest_completed_report.cycle.uuid %}" class="reviewee-name-link">{{ item.reviewee.name }}</a>
                             {% elif perms.accounts.can_manage_cycles %}
                             <a href="{% url 'review_cycle_detail' item.latest_completed_report.cycle.uuid %}" class="reviewee-name-link">{{ item.reviewee.name }}</a>
@@ -54,6 +55,11 @@
                         {% endif %}
                     </td>
                     <td style="color: var(--text-secondary);">{{ item.reviewee.email }}</td>
+                    {% if has_campuses %}
+                    <td>
+                        {% for campus in item.reviewee.campuses.all %}<span class="badge" style="background: var(--bg-light); color: var(--text-primary); border: 1px solid var(--border); margin: 0 0.25rem 0.25rem 0;">{{ campus.name }}</span>{% empty %}<span style="color: #cbd5e1;">—</span>{% endfor %}
+                    </td>
+                    {% endif %}
                     <td>
                         {% if item.latest_questionnaire %}
                         <div style="font-weight: 500;">{{ item.latest_questionnaire.name }}</div>
@@ -75,7 +81,7 @@
                             {% endif %}
 
                             {% if item.latest_completed_report %}
-                            {% if perms.accounts.can_view_all_reports or item.reviewee.email|lower == user.email|lower %}
+                            {% if item.can_view_report %}
                             <a href="{% url 'reports:view_report' item.latest_completed_report.cycle.uuid %}" class="btn btn-sm btn-secondary" style="text-decoration: none; cursor: pointer;">Report</a>
                             {% elif perms.accounts.can_manage_cycles %}
                             <a href="{% url 'review_cycle_detail' item.latest_completed_report.cycle.uuid %}" class="btn btn-sm btn-secondary" style="text-decoration: none; cursor: pointer;">Completed</a>

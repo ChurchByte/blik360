@@ -4,8 +4,15 @@ from django.utils.html import format_html
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import Reviewee, UserProfile, OrganizationInvitation
+from .models import Campus, Reviewee, UserProfile, OrganizationInvitation
 from core.gdpr import GDPRDeletionService
+
+
+@admin.register(Campus)
+class CampusAdmin(admin.ModelAdmin):
+    list_display = ['name', 'organization', 'created_at']
+    list_filter = ['organization']
+    search_fields = ['name']
 
 
 @admin.register(Reviewee)

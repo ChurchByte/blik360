@@ -204,6 +204,49 @@
             </form>
         </div>
 
+        <!-- Campuses -->
+        <div class="card" id="campuses">
+            <div class="card-header">
+                <h2 class="card-title">Campuses</h2>
+            </div>
+            <div class="card-body">
+                <p class="help-text" style="margin-top: 0; margin-bottom: 1rem;">
+                    Assign reviewees to one or more campuses, then limit Report Viewers to the campuses they look after (Team &rarr; Manage roles).
+                </p>
+                {% if campuses %}
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+                    {% for campus in campuses %}
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                        {% if perms.accounts.can_manage_organization %}
+                        <form method="post" action="{% url 'campus_rename' campus.id %}" style="display: flex; gap: 0.5rem; flex: 1; min-width: 200px;">
+                            {% csrf_token %}
+                            <input type="text" name="name" value="{{ campus.name }}" class="form-control" maxlength="100" required aria-label="Campus name" style="flex: 1;">
+                            <button type="submit" class="btn btn-secondary btn-sm">Rename</button>
+                        </form>
+                        <form method="post" action="{% url 'campus_delete' campus.id %}" onsubmit="return confirm('Delete the {{ campus.name|escapejs }} campus?\n\n{{ campus.reviewee_count }} reviewee(s) will be removed from it, and {{ campus.viewer_count }} Report Viewer(s) limited to it will no longer see those reports unless another of their campuses covers them.');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                        {% else %}
+                        <span style="flex: 1;">{{ campus.name }}</span>
+                        {% endif %}
+                        <small style="color: var(--text-secondary); width: 100%;">{{ campus.reviewee_count }} reviewee{{ campus.reviewee_count|pluralize }} &middot; {{ campus.viewer_count }} campus-limited Report Viewer{{ campus.viewer_count|pluralize }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">No campuses yet.</p>
+                {% endif %}
+                {% if perms.accounts.can_manage_organization %}
+                <form method="post" action="{% url 'campus_create' %}" style="display: flex; gap: 0.5rem;">
+                    {% csrf_token %}
+                    <input type="text" name="name" class="form-control" maxlength="100" required placeholder="New campus name" aria-label="New campus name" style="flex: 1;">
+                    <button type="submit" class="btn btn-primary btn-sm">Add campus</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
         <!-- User Registration Settings -->
         <div class="card">
             <div class="card-header">
@@ -592,7 +635,7 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
 
             <!-- Export Data -->
-            {% if perms.accounts.can_manage_organization and perms.accounts.can_view_all_reports %}
+            {% if can_export_data %}
             <div>
                 <h3 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 6px;">Export Organization Data</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.8125rem;">
