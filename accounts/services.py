@@ -28,6 +28,7 @@ def export_organization_data(organization):
             'email': organization.email,
             'created_at': organization.created_at.isoformat(),
         },
+        'campuses': [],
         'users': [],
         'reviewees': [],
         'questionnaires': [],
@@ -35,23 +36,30 @@ def export_organization_data(organization):
         'reports': [],
     }
 
+    # Export campuses
+    for campus in organization.campuses.all():
+        data['campuses'].append({'name': campus.name})
+
     # Export users
-    for profile in UserProfile.objects.for_organization(organization).select_related('user'):
+    for profile in UserProfile.objects.for_organization(organization).select_related('user').prefetch_related('report_campuses'):
         data['users'].append({
             'username': profile.user.username,
             'email': profile.user.email,
             'is_org_admin': profile.user.has_perm('accounts.can_manage_organization'),
             'can_create_cycles_for_others': profile.can_create_cycles_for_others,
             'roles': sorted(get_user_roles(profile.user)),
+            'report_all_campuses': profile.report_all_campuses,
+            'report_campuses': sorted(c.name for c in profile.report_campuses.all()),
             'created_at': profile.created_at.isoformat(),
         })
 
     # Export reviewees
-    for reviewee in Reviewee.objects.for_organization(organization):
+    for reviewee in Reviewee.objects.for_organization(organization).prefetch_related('campuses'):
         data['reviewees'].append({
             'name': reviewee.name,
             'email': reviewee.email,
             'department': reviewee.department,
+            'campuses': sorted(c.name for c in reviewee.campuses.all()),
             'is_active': reviewee.is_active,
             'created_at': reviewee.created_at.isoformat(),
         })

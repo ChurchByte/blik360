@@ -200,7 +200,11 @@ def import_reviewees(organization, reviewees_data, conflict_resolution='skip'):
     Returns:
         dict: Import result with counts and warnings
     """
-    from accounts.models import Reviewee
+    from accounts.models import Campus, Reviewee
+
+    def campuses_for(reviewee_data):
+        names = [n.strip()[:100] for n in reviewee_data.get('campuses') or [] if str(n).strip()]
+        return [Campus.objects.get_or_create(organization=organization, name=n)[0] for n in names]
 
     result = {
         'created': 0,
@@ -231,6 +235,8 @@ def import_reviewees(organization, reviewees_data, conflict_resolution='skip'):
                     existing.department = reviewee_data.get('department', '')
                     existing.is_active = reviewee_data.get('is_active', True)
                     existing.save()
+                    if 'campuses' in reviewee_data:
+                        existing.campuses.set(campuses_for(reviewee_data))
                     result['updated'] += 1
                     continue
 
@@ -241,13 +247,14 @@ def import_reviewees(organization, reviewees_data, conflict_resolution='skip'):
                     result['warnings'].append(f"Created duplicate reviewee: {name} with email {email} (original: {original_email})")
 
             # Create new reviewee
-            Reviewee.objects.create(
+            reviewee = Reviewee.objects.create(
                 organization=organization,
                 name=name,
                 email=email,
                 department=reviewee_data.get('department', ''),
                 is_active=reviewee_data.get('is_active', True),
             )
+            reviewee.campuses.set(campuses_for(reviewee_data))
             result['created'] += 1
 
         except Exception as e:

@@ -15,11 +15,12 @@ from django.urls import reverse
 from django.http import HttpResponseRedirect
 from datetime import timedelta
 
-from accounts.models import Reviewee, UserProfile, OrganizationInvitation
+from accounts.models import Campus, Reviewee, UserProfile, OrganizationInvitation
 from accounts.permissions import (
     can_manage_cycles,
     can_view_all_reports,
     can_view_cycle_report,
+    can_view_reviewee_report,
     visible_cycles,
 )
 from core.audit import log_event, Actions
@@ -31,6 +32,7 @@ from core.models import Organization
 from core.gdpr import GDPRDeletionService
 from core.env_config import env_managed_fields
 
+import json
 import logging
 logger = logging.getLogger(__name__)
 
@@ -101,6 +103,7 @@ def dashboard(request):
         completed_cycles_data.append({
             'cycle': cycle,
             'report_exists': report_exists,
+            'can_view_report': report_exists and can_view_cycle_report(request.user, cycle),
         })
 
     # Check if user has seen welcome modal
@@ -145,7 +148,9 @@ def team_list(request):
         return redirect('admin_dashboard')
 
     # Get all active (non-anonymized) users in this organization
-    users_qs = UserProfile.objects.for_organization(org).select_related('user').order_by('-user__date_joined')
+    users_qs = (UserProfile.objects.for_organization(org).select_related('user')
+                .prefetch_related('report_campuses').order_by('-user__date_joined'))
+    org_campuses = list(Campus.objects.filter(organization=org))
 
     # Get per_page from request, default to 25
     per_page = request.GET.get('per_page', '25')
@@ -178,6 +183,9 @@ def team_list(request):
         user_profile.is_org_admin = ORG_ADMIN in roles
         user_profile.is_cycle_manager = CYCLE_MANAGER in roles
         user_profile.is_report_viewer = REPORT_VIEWER in roles
+        report_campuses = list(user_profile.report_campuses.all())
+        user_profile.report_campus_names = [c.name for c in report_campuses]
+        user_profile.report_campus_ids_json = json.dumps([c.id for c in report_campuses])
 
     # Get pending invitations
     invitations = OrganizationInvitation.objects.filter(
@@ -194,6 +202,7 @@ def team_list(request):
         'subscription_status': subscription_status,
         'per_page': per_page,
         'viewer_can_manage_owners': request.user.has_perm('accounts.can_manage_owners'),
+        'campuses': org_campuses,
     }
 
     return render(request, 'admin_dashboard/team.html', context)
@@ -209,7 +218,7 @@ def update_user_permissions(request):
     """
     from accounts.permissions import (
         get_user_roles, set_user_roles, role_labels, count_owners, can_manage_owners,
-        ASSIGNABLE_ROLES, OWNER_ASSIGNABLE_ROLES,
+        set_report_campus_scope, ASSIGNABLE_ROLES, OWNER_ASSIGNABLE_ROLES,
         OWNER, ORG_ADMIN, CYCLE_MANAGER, REPORT_VIEWER,
     )
 
@@ -261,26 +270,50 @@ def update_user_permissions(request):
 
     old_roles, new_roles = set_user_roles(target_user, requested)
 
-    if old_roles == new_roles:
+    # Report Viewer campus scope. Only applied when the dialog sent it, so
+    # older clients that post roles alone keep the current scope.
+    scope_change = None
+    if REPORT_VIEWER in new_roles and request.POST.get('campus_scope_submitted'):
+        posted_ids = [c for c in request.POST.getlist('report_campuses') if str(c).isdigit()]
+        before, after = set_report_campus_scope(
+            user_profile,
+            request.POST.get('report_all_campuses') == 'on',
+            posted_ids,
+        )
+        if before != after:
+            scope_change = {'from': before, 'to': after}
+
+    if old_roles == new_roles and not scope_change:
         messages.info(request, 'No changes made.')
         return redirect('team_list')
 
-    added = sorted(new_roles - old_roles)
-    removed = sorted(old_roles - new_roles)
+    details = {'roles': sorted(new_roles), 'self_change': is_self}
+    if old_roles != new_roles:
+        details.update({'added': sorted(new_roles - old_roles),
+                        'removed': sorted(old_roles - new_roles)})
+    if scope_change:
+        details['report_campuses'] = scope_change
     log_event(
         request, Actions.ROLES_CHANGED,
         target=target_user, target_label=target_user.email,
-        details={'added': added, 'removed': removed, 'roles': sorted(new_roles),
-                 'self_change': is_self},
+        details=details,
     )
     labels = ', '.join(role_labels(new_roles)) or 'Member'
     who = 'You now have' if is_self else f'{target_user.email} now has'
     messages.success(request, f'{who}: {labels}.')
-    if REPORT_VIEWER in added:
+    if REPORT_VIEWER in new_roles and (REPORT_VIEWER not in old_roles or scope_change):
+        user_profile.refresh_from_db()
+        subject = 'You' if is_self else target_user.email
+        if user_profile.report_all_campuses:
+            reach = 'every report'
+        else:
+            names = sorted(user_profile.report_campuses.values_list('name', flat=True))
+            reach = ('reports for reviewees in: ' + ', '.join(names)) if names else \
+                'no one else\'s reports yet (no campuses selected)'
         messages.info(
             request,
-            ('You' if is_self else target_user.email) + ' can now read every report and, for '
-            'investigations, see which reviewer gave which answers.'
+            f'{subject} can now read {reach} and, for those reviewees\' investigations, '
+            'see which reviewer gave which answers.'
         )
 
     if is_self and ORG_ADMIN not in new_roles:
@@ -299,7 +332,7 @@ def reviewee_list(request):
     # Filter out anonymized reviewees (those with @deleted.invalid emails)
     reviewees_qs = Reviewee.objects.for_organization(org).filter(is_active=True).annotate(
         cycle_count=Count('review_cycles')
-    ).order_by('name')
+    ).prefetch_related('campuses').order_by('name')
 
     # Get per_page from request, default to 25
     per_page = request.GET.get('per_page', '25')
@@ -357,17 +390,40 @@ def reviewee_list(request):
             'latest_questionnaire': latest_cycle.questionnaire if latest_cycle else None,
             'active_cycle': active_cycle,
             'latest_completed_report': latest_completed_report,
+            'can_view_report': can_view_reviewee_report(request.user, reviewee),
         })
 
     context = {
         'reviewees_with_latest': reviewees_with_latest,
         'reviewees': reviewees,  # Paginated object
+        'has_campuses': Campus.objects.filter(organization=org).exists() if org else False,
         'questionnaires': questionnaires,
         'subscription_status': subscription_status,
         'per_page': per_page,
     }
 
     return render(request, 'admin_dashboard/reviewee_list.html', context)
+
+
+def _reviewee_form_context(request, reviewee=None, **extra):
+    org = request.organization or (reviewee.organization if reviewee else None)
+    campuses = list(Campus.objects.filter(organization=org)) if org else []
+    if request.method == 'POST':
+        selected = {int(c) for c in request.POST.getlist('campuses') if str(c).isdigit()}
+    elif reviewee is not None:
+        selected = set(reviewee.campuses.values_list('id', flat=True))
+    else:
+        selected = set()
+    context = {'campuses': campuses, 'selected_campus_ids': selected}
+    if reviewee is not None:
+        context['reviewee'] = reviewee
+    context.update(extra)
+    return context
+
+
+def _posted_campuses(request, organization):
+    ids = [c for c in request.POST.getlist('campuses') if str(c).isdigit()]
+    return Campus.objects.filter(organization=organization, id__in=ids)
 
 
 @login_required
@@ -406,11 +462,13 @@ def reviewee_create(request):
             if existing:
                 if existing.is_active:
                     messages.error(request, f'A reviewee with the email "{email}" already exists.')
-                    return render(request, 'admin_dashboard/reviewee_form.html', {'action': 'Create'})
+                    return render(request, 'admin_dashboard/reviewee_form.html',
+                                  _reviewee_form_context(request, action='Create'))
                 existing.name = name
                 existing.department = department
                 existing.is_active = True
                 existing.save()
+                existing.campuses.set(_posted_campuses(request, organization))
                 messages.success(request, f'Reviewee "{existing.name}" reactivated successfully.')
                 return redirect('reviewee_list')
 
@@ -421,6 +479,7 @@ def reviewee_create(request):
                     email=email,
                     department=department
                 )
+                reviewee.campuses.set(_posted_campuses(request, organization))
                 messages.success(request, f'Reviewee "{reviewee.name}" created successfully.')
                 return redirect('reviewee_list')
             except Exception as e:
@@ -428,7 +487,8 @@ def reviewee_create(request):
         else:
             messages.error(request, 'Name and email are required.')
 
-    return render(request, 'admin_dashboard/reviewee_form.html', {'action': 'Create'})
+    return render(request, 'admin_dashboard/reviewee_form.html',
+                  _reviewee_form_context(request, action='Create'))
 
 
 @login_required
@@ -443,7 +503,10 @@ def reviewee_edit(request, reviewee_id):
         )
         return redirect('reviewee_list')
 
-    reviewee = get_object_or_404(Reviewee, id=reviewee_id)
+    reviewees_qs = Reviewee.objects.all()
+    if request.organization:
+        reviewees_qs = reviewees_qs.filter(organization=request.organization)
+    reviewee = get_object_or_404(reviewees_qs, id=reviewee_id)
 
     if request.method == 'POST':
         reviewee.name = request.POST.get('name', reviewee.name)
@@ -452,17 +515,14 @@ def reviewee_edit(request, reviewee_id):
 
         try:
             reviewee.save()
+            reviewee.campuses.set(_posted_campuses(request, reviewee.organization))
             messages.success(request, f'Reviewee "{reviewee.name}" updated successfully.')
             return redirect('reviewee_list')
         except Exception as e:
             messages.error(request, f'Error updating reviewee: {str(e)}')
 
-    context = {
-        'reviewee': reviewee,
-        'action': 'Edit',
-    }
-
-    return render(request, 'admin_dashboard/reviewee_form.html', context)
+    return render(request, 'admin_dashboard/reviewee_form.html',
+                  _reviewee_form_context(request, reviewee, action='Edit'))
 
 
 @login_required
@@ -477,7 +537,10 @@ def reviewee_delete(request, reviewee_id):
         )
         return redirect('reviewee_list')
 
-    reviewee = get_object_or_404(Reviewee, id=reviewee_id)
+    reviewees_qs = Reviewee.objects.all()
+    if request.organization:
+        reviewees_qs = reviewees_qs.filter(organization=request.organization)
+    reviewee = get_object_or_404(reviewees_qs, id=reviewee_id)
 
     if request.method == 'POST':
         reviewee.is_active = False
@@ -2100,6 +2163,92 @@ def send_report_email(request, cycle_uuid):
     return redirect('review_cycle_detail', cycle_uuid=cycle.uuid)
 
 
+def _campus_admin_guard(request):
+    organization = request.organization
+    if not organization or not request.user.has_perm('accounts.can_manage_organization'):
+        messages.error(request, 'You do not have permission to modify organization settings.')
+        return None
+    return organization
+
+
+def _campus_redirect():
+    return redirect(f"{reverse('settings')}#campuses")
+
+
+def _clean_campus_name(request):
+    return ' '.join((request.POST.get('name') or '').split())[:100]
+
+
+@login_required
+@require_POST
+def campus_create(request):
+    """Add a campus to the organization (Organization Admins)."""
+    organization = _campus_admin_guard(request)
+    if not organization:
+        return redirect('settings')
+    name = _clean_campus_name(request)
+    if not name:
+        messages.error(request, 'Enter a campus name.')
+        return _campus_redirect()
+    if Campus.objects.filter(organization=organization, name__iexact=name).exists():
+        messages.error(request, f'A campus called "{name}" already exists.')
+        return _campus_redirect()
+    campus = Campus.objects.create(organization=organization, name=name)
+    log_event(request, Actions.SETTINGS_CHANGED, target=organization,
+              details={'section': 'campuses', 'added': campus.name})
+    messages.success(request, f'Campus "{campus.name}" added.')
+    return _campus_redirect()
+
+
+@login_required
+@require_POST
+def campus_rename(request, campus_id):
+    organization = _campus_admin_guard(request)
+    if not organization:
+        return redirect('settings')
+    campus = get_object_or_404(Campus, id=campus_id, organization=organization)
+    name = _clean_campus_name(request)
+    if not name:
+        messages.error(request, 'Enter a campus name.')
+        return _campus_redirect()
+    if Campus.objects.filter(organization=organization, name__iexact=name).exclude(id=campus.id).exists():
+        messages.error(request, f'A campus called "{name}" already exists.')
+        return _campus_redirect()
+    old_name = campus.name
+    if old_name != name:
+        campus.name = name
+        campus.save()
+        log_event(request, Actions.SETTINGS_CHANGED, target=organization,
+                  details={'section': 'campuses', 'renamed': {'from': old_name, 'to': name}})
+        messages.success(request, f'Campus "{old_name}" renamed to "{name}".')
+    return _campus_redirect()
+
+
+@login_required
+@require_POST
+def campus_delete(request, campus_id):
+    """
+    Delete a campus. Its reviewees simply lose that campus; Report Viewers who
+    were limited to it lose access to those reviewees' reports (unless another
+    of their campuses still covers them).
+    """
+    organization = _campus_admin_guard(request)
+    if not organization:
+        return redirect('settings')
+    campus = get_object_or_404(Campus, id=campus_id, organization=organization)
+    name = campus.name
+    details = {
+        'section': 'campuses',
+        'deleted': name,
+        'reviewees': campus.reviewees.count(),
+        'report_viewers': campus.report_viewers.count(),
+    }
+    campus.delete()
+    log_event(request, Actions.SETTINGS_CHANGED, target=organization, details=details)
+    messages.success(request, f'Campus "{name}" deleted.')
+    return _campus_redirect()
+
+
 @login_required
 @require_POST
 def update_logo(request):
@@ -2321,6 +2470,11 @@ def settings_view(request):
         'new_token': new_token,
         'new_token_name': new_token_name,
         'locked_fields': locked,
+        'can_export_data': is_org_admin and can_view_all_reports(request.user),
+        'campuses': Campus.objects.filter(organization=organization).annotate(
+            reviewee_count=Count('reviewees', filter=Q(reviewees__is_active=True), distinct=True),
+            viewer_count=Count('report_viewers', distinct=True),
+        ).order_by('name'),
     }
 
     return render(request, 'admin_dashboard/settings.html', context)

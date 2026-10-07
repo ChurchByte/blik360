@@ -4,7 +4,7 @@ from django.http import Http404
 from django.views.decorators.http import require_http_methods
 from accounts.permissions import (
     can_investigate_responses,
-    can_view_all_reports,
+    can_view_reviewee_reports,
     is_own_cycle,
 )
 from core.audit import log_event, Actions
@@ -17,8 +17,9 @@ import uuid
 def get_cycle_or_404(request, cycle_uuid):
     """
     Get a cycle for the Report Viewer views: must be in the user's organization,
-    and the user must be a Report Viewer. A cycle UUID alone is not authorization —
-    without the org check a Report Viewer could read another organization's report.
+    and the user must be a Report Viewer whose campuses cover the reviewee. A
+    cycle UUID alone is not authorization — without the org check a Report
+    Viewer could read another organization's report.
     """
     cycle = get_object_or_404(
         ReviewCycle.objects.select_related('reviewee', 'questionnaire'),
@@ -26,7 +27,7 @@ def get_cycle_or_404(request, cycle_uuid):
     )
     in_org = (not request.organization
               or cycle.reviewee.organization_id == request.organization.id)
-    if not in_org or not can_view_all_reports(request.user):
+    if not in_org or not can_view_reviewee_reports(request.user, cycle.reviewee):
         raise Http404
     return cycle
 
@@ -35,10 +36,10 @@ def get_cycle_or_404(request, cycle_uuid):
 def view_report(request, cycle_uuid):
     """View aggregated feedback report for a review cycle (Report Viewers only)"""
     # Reviewees reach their own report through the token URL, not the admin view.
-    if not can_view_all_reports(request.user):
-        cycle = get_object_or_404(
-            ReviewCycle.objects.select_related('reviewee'), uuid=cycle_uuid
-        )
+    cycle = get_object_or_404(
+        ReviewCycle.objects.select_related('reviewee'), uuid=cycle_uuid
+    )
+    if not can_view_reviewee_reports(request.user, cycle.reviewee):
         if not is_own_cycle(request.user, cycle):
             raise Http404
         report = Report.objects.filter(cycle=cycle).first() or generate_report(cycle)
@@ -111,7 +112,8 @@ def reviewee_report(request, access_token):
 
     # Check if report is available (cycle should be completed)
     # Report Viewers can bypass this check
-    can_bypass = request.user.is_authenticated and can_view_all_reports(request.user)
+    can_bypass = (request.user.is_authenticated
+                  and can_view_reviewee_reports(request.user, cycle.reviewee))
     if not cycle.was_completed and not can_bypass:
         return render(request, 'reports/report_not_ready.html', {
             'cycle': cycle,

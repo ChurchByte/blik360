@@ -89,14 +89,14 @@
                             {% if user_profile.is_owner %}<span class="badge" style="background: #1e3a8a; color: white;">Owner</span>{% endif %}
                             {% if user_profile.is_org_admin %}<span class="badge" style="background: #059669; color: white;">Organization Admin</span>{% endif %}
                             {% if user_profile.is_cycle_manager %}<span class="badge" style="background: #0ea5e9; color: white;">Cycle Manager</span>{% endif %}
-                            {% if user_profile.is_report_viewer %}<span class="badge" style="background: #b45309; color: white;">Report Viewer</span>{% endif %}
+                            {% if user_profile.is_report_viewer %}<span class="badge" style="background: #b45309; color: white;" title="{% if user_profile.report_all_campuses %}All campuses{% elif user_profile.report_campus_names %}{{ user_profile.report_campus_names|join:', ' }}{% else %}No campuses selected{% endif %}">Report Viewer{% if campuses or not user_profile.report_all_campuses %} &middot; {% if user_profile.report_all_campuses %}All campuses{% elif user_profile.report_campus_names %}{{ user_profile.report_campus_names|join:', ' }}{% else %}No campuses{% endif %}{% endif %}</span>{% endif %}
                             {% if not user_profile.role_labels and not user_profile.user.is_superuser %}<span class="badge" style="background: #6b7280; color: white;">Member</span>{% endif %}
                         </td>
                         <td>{{ user_profile.user.date_joined|date:"M d, Y" }}</td>
                         {% if perms.accounts.can_manage_organization %}
                         <td>
                             {% if user_profile.user.id == request.user.id or not user_profile.user.is_superuser %}
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {% if user_profile.user.id == request.user.id %}true{% else %}false{% endif %}, {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }})">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {% if user_profile.user.id == request.user.id %}true{% else %}false{% endif %}, {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }}, {{ user_profile.report_all_campuses|yesno:'true,false' }}, {{ user_profile.report_campus_ids_json }})">
                                 Manage roles
                             </button>
                             {% else %}
@@ -129,7 +129,7 @@
                             {% if user_profile.is_owner %}<span class="badge" style="background: #1e3a8a; color: white;">Owner</span>{% endif %}
                             {% if user_profile.is_org_admin %}<span class="badge" style="background: #059669; color: white;">Organization Admin</span>{% endif %}
                             {% if user_profile.is_cycle_manager %}<span class="badge" style="background: #0ea5e9; color: white;">Cycle Manager</span>{% endif %}
-                            {% if user_profile.is_report_viewer %}<span class="badge" style="background: #b45309; color: white;">Report Viewer</span>{% endif %}
+                            {% if user_profile.is_report_viewer %}<span class="badge" style="background: #b45309; color: white;" title="{% if user_profile.report_all_campuses %}All campuses{% elif user_profile.report_campus_names %}{{ user_profile.report_campus_names|join:', ' }}{% else %}No campuses selected{% endif %}">Report Viewer{% if campuses or not user_profile.report_all_campuses %} &middot; {% if user_profile.report_all_campuses %}All campuses{% elif user_profile.report_campus_names %}{{ user_profile.report_campus_names|join:', ' }}{% else %}No campuses{% endif %}{% endif %}</span>{% endif %}
                             {% if not user_profile.role_labels and not user_profile.user.is_superuser %}<span class="badge" style="background: #6b7280; color: white;">Member</span>{% endif %}
                     </div>
                 </div>
@@ -144,7 +144,7 @@
                     </div>
                     {% if perms.accounts.can_manage_organization %}
                         {% if user_profile.user.id == request.user.id or not user_profile.user.is_superuser %}
-                        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 0.5rem;" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {% if user_profile.user.id == request.user.id %}true{% else %}false{% endif %}, {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }})">
+                        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 0.5rem;" onclick="showManageRolesModal({{ user_profile.id }}, '{{ user_profile.user.email|escapejs }}', {% if user_profile.user.id == request.user.id %}true{% else %}false{% endif %}, {{ user_profile.is_owner|yesno:'true,false' }}, {{ user_profile.is_org_admin|yesno:'true,false' }}, {{ user_profile.is_cycle_manager|yesno:'true,false' }}, {{ user_profile.is_report_viewer|yesno:'true,false' }}, {{ user_profile.report_all_campuses|yesno:'true,false' }}, {{ user_profile.report_campus_ids_json }})">
                             Manage roles
                         </button>
                         {% endif %}
@@ -314,14 +314,45 @@
                     </label>
                 </div>
                 <div class="form-check">
-                    <input type="checkbox" id="role-report-viewer" name="roles" value="report_viewer" class="form-check-input">
+                    <input type="checkbox" id="role-report-viewer" name="roles" value="report_viewer" class="form-check-input" onchange="syncCampusScope()">
                     <label for="role-report-viewer" style="display: inline; font-weight: normal;">
                         <strong>Report Viewer (HR)</strong>
                         <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
-                            Reads every report. For investigations, can see which reviewer gave which answers (each access is recorded with a reason). Only give this to HR staff.
+                            Reads reports for the campuses ticked below. For investigations, can see which reviewer gave which answers (each access is recorded with a reason). Only give this to HR staff.
                         </small>
                     </label>
                 </div>
+                <fieldset id="report-campus-scope" style="display: none; margin: -0.25rem 0 0 24px; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 8px;">
+                    <legend style="font-size: 0.875rem; font-weight: 600; padding: 0 0.25rem;">Campuses they can see reports for</legend>
+                    <input type="hidden" name="campus_scope_submitted" value="1">
+                    <div class="form-check" style="margin-bottom: 0.5rem;">
+                        <input type="checkbox" id="report-all-campuses" name="report_all_campuses" class="form-check-input" onchange="syncCampusScope()">
+                        <label for="report-all-campuses" style="display: inline; font-weight: normal;">
+                            <strong>Select All</strong>
+                            <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
+                                Every reviewee, including people with no campus and campuses added later.
+                            </small>
+                        </label>
+                    </div>
+                    {% for campus in campuses %}
+                    <div class="form-check">
+                        <input type="checkbox" id="report-campus-{{ campus.id }}" name="report_campuses" value="{{ campus.id }}" class="form-check-input report-campus-box" onchange="syncCampusScope()">
+                        <label for="report-campus-{{ campus.id }}" style="display: inline; font-weight: normal;">{{ campus.name }}</label>
+                    </div>
+                    {% empty %}
+                    <small style="display: block; color: var(--text-secondary);">
+                        No campuses yet. {% if perms.accounts.can_manage_organization %}<a href="{% url 'settings' %}#campuses">Add campuses in Settings</a> to limit Report Viewers to particular campuses.{% endif %}
+                    </small>
+                    {% endfor %}
+                    <small id="report-campus-none-warning" style="display: none; margin-top: 0.5rem; color: #b45309;">
+                        With nothing ticked they can only see their own report.
+                    </small>
+                    {% if campuses %}
+                    <small style="display: block; margin-top: 0.5rem; color: var(--text-secondary);">
+                        Reviewees with no campus are only visible with Select All.
+                    </small>
+                    {% endif %}
+                </fieldset>
             </div>
 
             <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 1rem;">
@@ -353,7 +384,22 @@ function syncRoleCheckboxes() {
     if (adminBox.checked) { cm.checked = false; }
 }
 
-function showManageRolesModal(userId, email, isSelf, isOwner, isAdmin, isCycleManager, isReportViewer) {
+function syncCampusScope() {
+    const viewer = document.getElementById('role-report-viewer').checked;
+    const scope = document.getElementById('report-campus-scope');
+    const all = document.getElementById('report-all-campuses');
+    const boxes = Array.from(document.querySelectorAll('.report-campus-box'));
+    scope.style.display = viewer ? 'block' : 'none';
+    // Select All covers every campus (and future ones), so tick and lock the list.
+    boxes.forEach(function (box) {
+        if (all.checked) { box.checked = true; }
+        box.disabled = all.checked;
+    });
+    const anyTicked = all.checked || boxes.some(function (box) { return box.checked; });
+    document.getElementById('report-campus-none-warning').style.display = (viewer && !anyTicked) ? 'block' : 'none';
+}
+
+function showManageRolesModal(userId, email, isSelf, isOwner, isAdmin, isCycleManager, isReportViewer, allCampuses, campusIds) {
     document.getElementById('roles-modal-user-id').value = userId;
     document.getElementById('roles-modal-email').textContent = isSelf ? 'you (' + email + ')' : email;
     document.getElementById('roles-modal-self-note').style.display = isSelf ? 'block' : 'none';
@@ -366,7 +412,13 @@ function showManageRolesModal(userId, email, isSelf, isOwner, isAdmin, isCycleMa
     adminBox.checked = isAdmin || isOwner;
     document.getElementById('role-cycle-manager').checked = isCycleManager;
     document.getElementById('role-report-viewer').checked = isReportViewer;
+    document.getElementById('report-all-campuses').checked = allCampuses;
+    document.querySelectorAll('.report-campus-box').forEach(function (box) {
+        box.disabled = false;
+        box.checked = (campusIds || []).indexOf(parseInt(box.value, 10)) !== -1;
+    });
     syncRoleCheckboxes();
+    syncCampusScope();
     document.getElementById('manage-roles-modal').style.display = 'flex';
 }
 

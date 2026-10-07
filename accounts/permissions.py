@@ -20,6 +20,11 @@ least a Member.
 Report content is only ever visible to Report Viewers and to the reviewee.
 Organization Admins and Cycle Managers can see that cycles exist and how far
 along they are, but not the results.
+
+Campus scope: a Report Viewer either covers "All campuses" (every reviewee,
+including reviewees with no campus and campuses added later) or a chosen set
+of campuses, in which case they only see reports for reviewees assigned to at
+least one of those campuses. Everyone can always see their own report.
 """
 from functools import wraps
 
@@ -309,9 +314,60 @@ def can_manage_cycles(user):
     return user.has_perm('accounts.can_manage_cycles')
 
 
-def can_view_all_reports(user):
-    """Report Viewer: may read the report content for any reviewee."""
+def is_report_viewer(user):
+    """Holds the Report Viewer role (for some or all campuses)."""
     return user.has_perm('accounts.can_view_all_reports')
+
+
+_ALL = 'all'
+
+
+def report_campus_scope(user):
+    """
+    Which reviewees' reports a Report Viewer may read:
+      None       — all campuses (and reviewees with no campus)
+      set of ids — only reviewees assigned to one of these campuses
+    Users without the Report Viewer role get an empty set. Cached on the user
+    object for the duration of the request.
+    """
+    cached = getattr(user, '_report_campus_scope', None)
+    if cached is not None:
+        return None if cached == _ALL else cached
+    if not getattr(user, 'is_authenticated', False) or not is_report_viewer(user):
+        scope = set()
+    else:
+        profile = UserProfile.objects.filter(user=user).first()
+        if profile is None or profile.report_all_campuses:
+            scope = None  # e.g. superusers without a profile
+        else:
+            scope = set(profile.report_campuses.values_list('id', flat=True))
+    try:
+        user._report_campus_scope = _ALL if scope is None else scope
+    except AttributeError:
+        pass
+    return scope
+
+
+def clear_report_campus_scope_cache(user):
+    if hasattr(user, '_report_campus_scope'):
+        del user._report_campus_scope
+
+
+def can_view_all_reports(user):
+    """Report Viewer covering all campuses: may read every report in the org."""
+    return is_report_viewer(user) and report_campus_scope(user) is None
+
+
+def can_view_reviewee_reports(user, reviewee):
+    """Report Viewer whose campus scope covers this reviewee (own reports aside)."""
+    if not getattr(user, 'is_authenticated', False) or not is_report_viewer(user):
+        return False
+    scope = report_campus_scope(user)
+    if scope is None:
+        return True
+    if not scope:
+        return False
+    return reviewee.campuses.filter(id__in=scope).exists()
 
 
 def can_investigate_responses(user):
@@ -336,35 +392,58 @@ def _own_filter(user, queryset, email_field):
     return queryset.filter(**{f'{email_field}__iexact': user.email})
 
 
+def _reviewee_prefix(email_field):
+    """'cycle__reviewee__email' -> 'cycle__reviewee__'."""
+    return email_field[:-len('email')] if email_field.endswith('email') else ''
+
+
+def _campus_filter(user, queryset, email_field):
+    """Report Viewer scope plus the user's own rows."""
+    from django.db.models import Q
+    scope = report_campus_scope(user)
+    if scope is None:
+        return queryset
+    condition = Q(pk__in=[])
+    if scope:
+        condition |= Q(**{f'{_reviewee_prefix(email_field)}campuses__in': list(scope)})
+    if user.email:
+        condition |= Q(**{f'{email_field}__iexact': user.email})
+    return queryset.filter(condition).distinct()
+
+
 def visible_cycles(user, queryset, email_field='reviewee__email'):
     """
     Restrict a ReviewCycle queryset to the cycles this user may see and run
     (status, progress, invitations) — NOT the report content; use
     visible_reports() / can_view_cycle_report() for that.
 
-    Cycle Managers, Organization Admins and Report Viewers see every cycle in
-    their organization; everyone else only sees cycles where they are the
-    reviewee (matched by email — there is no FK from Reviewee to User).
+    Cycle Managers and Organization Admins see every cycle in their
+    organization; Report Viewers see the cycles of reviewees in their campuses;
+    everyone else only sees cycles where they are the reviewee (matched by
+    email — there is no FK from Reviewee to User).
 
     Organization scoping is a separate concern and must already be applied.
     """
     if not getattr(user, 'is_authenticated', False):
         return queryset.none()
-    if can_manage_cycles(user) or can_view_all_reports(user):
+    if can_manage_cycles(user):
         return queryset
+    if is_report_viewer(user):
+        return _campus_filter(user, queryset, email_field)
     return _own_filter(user, queryset, email_field)
 
 
 def visible_reports(user, queryset, email_field='cycle__reviewee__email'):
     """
     Restrict a Report queryset (or any queryset whose rows expose report
-    content) to what this user may read: everything for Report Viewers, their
-    own reports for everyone else.
+    content) to what this user may read: Report Viewers see reports for
+    reviewees in their campuses (or everything with "All campuses"); everyone
+    sees their own reports.
     """
     if not getattr(user, 'is_authenticated', False):
         return queryset.none()
-    if can_view_all_reports(user):
-        return queryset
+    if is_report_viewer(user):
+        return _campus_filter(user, queryset, email_field)
     return _own_filter(user, queryset, email_field)
 
 
@@ -373,8 +452,46 @@ def is_own_cycle(user, cycle):
     return bool(user.email) and cycle.reviewee.email.lower() == user.email.lower()
 
 
+def is_own_reviewee(user, reviewee):
+    return bool(getattr(user, 'email', '')) and reviewee.email.lower() == user.email.lower()
+
+
 def can_view_cycle_report(user, cycle):
-    return can_view_all_reports(user) or is_own_cycle(user, cycle)
+    return can_view_reviewee_reports(user, cycle.reviewee) or is_own_cycle(user, cycle)
+
+
+def can_view_reviewee_report(user, reviewee):
+    """Own report, or a Report Viewer whose campuses cover this reviewee."""
+    return is_own_reviewee(user, reviewee) or can_view_reviewee_reports(user, reviewee)
+
+
+def set_report_campus_scope(profile, all_campuses, campus_ids):
+    """
+    Set a Report Viewer's campus scope. campus_ids are filtered to the
+    profile's organization. Returns (before, after) as display dicts for the
+    audit log.
+    """
+    from accounts.models import Campus
+
+    def describe():
+        return {
+            'all_campuses': profile.report_all_campuses,
+            'campuses': sorted(profile.report_campuses.values_list('name', flat=True)),
+        }
+
+    before = describe()
+    campuses = Campus.objects.filter(
+        organization_id=profile.organization_id, id__in=list(campus_ids or [])
+    )
+    with transaction.atomic():
+        profile.report_all_campuses = bool(all_campuses)
+        profile.save(update_fields=['report_all_campuses', 'updated_at'])
+        if all_campuses:
+            profile.report_campuses.clear()
+        else:
+            profile.report_campuses.set(campuses)
+    clear_report_campus_scope_cache(profile.user)
+    return before, describe()
 
 
 # ---------------------------------------------------------------------------

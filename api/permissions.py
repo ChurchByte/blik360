@@ -166,8 +166,9 @@ class HasAPIPermission(BasePermission):
 
 class CanViewAllReports(BasePermission):
     """
-    Requires 'can_view_all_reports' permission.
-    Used for viewing reports of other users.
+    Requires the Report Viewer role ('can_view_all_reports' permission).
+    Campus scope is applied separately by the view's queryset
+    (accounts.permissions.visible_reports).
     """
 
     def has_permission(self, request, view):

@@ -26,6 +26,19 @@ class UserProfile(TimeStampedModel):
         default=False,
         help_text='Whether user has seen the welcome modal'
     )
+    # Campus scope for the Report Viewer role (ignored for everyone else).
+    report_all_campuses = models.BooleanField(
+        default=True,
+        help_text='Report Viewers: may read reports for every reviewee, including '
+                  'reviewees with no campus and campuses added later'
+    )
+    report_campuses = models.ManyToManyField(
+        'Campus',
+        blank=True,
+        related_name='report_viewers',
+        help_text='Report Viewers without "all campuses": the campuses whose '
+                  'reviewees\' reports they may read'
+    )
 
     objects = OrganizationManager()
 
@@ -183,6 +196,26 @@ class PasswordResetToken(TimeStampedModel):
         return self.used_at is None and self.expires_at > timezone.now()
 
 
+class Campus(TimeStampedModel):
+    """A campus (site/location) of an organization. Reviewees can belong to
+    several campuses, and Report Viewers can be limited to some campuses."""
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='campuses'
+    )
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        db_table = 'campuses'
+        ordering = ['name']
+        unique_together = ['organization', 'name']
+        verbose_name_plural = 'campuses'
+
+    def __str__(self):
+        return self.name
+
+
 class Reviewee(TimeStampedModel):
     """Person being reviewed in 360 feedback"""
     # Public UUID for external references (API, URLs)
@@ -202,6 +235,13 @@ class Reviewee(TimeStampedModel):
     name = models.CharField(max_length=255)
     email = models.EmailField()
     department = models.CharField(max_length=255, blank=True)
+    campuses = models.ManyToManyField(
+        Campus,
+        blank=True,
+        related_name='reviewees',
+        help_text='Report Viewers limited to campuses only see reports for '
+                  'reviewees in one of their campuses'
+    )
     is_active = models.BooleanField(default=True)
 
     objects = OrganizationManager()
