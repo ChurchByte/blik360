@@ -188,10 +188,20 @@ def team_list(request):
         user_profile.report_campus_ids_json = json.dumps([c.id for c in report_campuses])
 
     # Get pending invitations
-    invitations = OrganizationInvitation.objects.filter(
+    invitations = list(OrganizationInvitation.objects.filter(
         organization=org,
         accepted_at__isnull=True
-    ).order_by('-created_at')
+    ).select_related('invited_by').prefetch_related('report_campuses').order_by('-created_at'))
+    from accounts.permissions import invitation_roles
+    for invitation in invitations:
+        roles = invitation_roles(invitation)
+        invitation.role_labels = role_labels(roles)
+        invitation.is_report_viewer = REPORT_VIEWER in roles
+        report_campuses = list(invitation.report_campuses.all())
+        invitation.report_campus_names = [c.name for c in report_campuses]
+        invitation.roles_json = json.dumps(sorted(roles))
+        invitation.report_campus_ids_json = json.dumps([c.id for c in report_campuses])
+        invitation.grants_owner = OWNER in roles
 
     # Get subscription status
     subscription_status = get_subscription_status(org) if org else None
@@ -203,6 +213,7 @@ def team_list(request):
         'per_page': per_page,
         'viewer_can_manage_owners': request.user.has_perm('accounts.can_manage_owners'),
         'campuses': org_campuses,
+        'default_cycle_manager': org.default_users_can_create_cycles,
     }
 
     return render(request, 'admin_dashboard/team.html', context)

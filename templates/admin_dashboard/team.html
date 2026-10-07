@@ -24,7 +24,7 @@
         </a>
         {% endif %}
         {% if perms.accounts.can_invite_members %}
-        <button type="button" class="btn btn-primary" onclick="document.getElementById('invite-modal').style.display='flex'">
+        <button type="button" class="btn btn-primary" onclick="showInviteModal()">
             Invite User
         </button>
         {% endif %}
@@ -33,22 +33,197 @@
 
 <!-- Invite Modal -->
 <div id="invite-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
-    <div style="background: var(--bg-card); padding: 2rem; border-radius: 12px; max-width: 500px; width: 90%;">
-        <h2 style="margin-top: 0;">Send Invitation</h2>
-        <form method="post" action="{% url 'send_invitation' %}">
+    <div style="background: var(--bg-card); padding: 2rem; border-radius: 12px; max-width: 560px; width: 90%; max-height: 90vh; overflow-y: auto;">
+        <h2 id="invite-modal-title" style="margin-top: 0;">Send Invitation</h2>
+        <form id="invite-form" method="post" action="{% url 'send_invitation' %}" data-send-url="{% url 'send_invitation' %}">
             {% csrf_token %}
             <div class="form-group">
                 <label for="email">Email Address</label>
                 <input type="email" id="email" name="email" class="form-control" required autofocus>
-                <small class="help-text">The user will receive an email with instructions to join</small>
+                <small class="help-text" id="invite-email-help">The user will receive an email with instructions to join</small>
             </div>
+
+            {% if perms.accounts.can_manage_organization %}
+            <fieldset style="margin-top: 1.25rem; padding: 0; border: 0;">
+                <legend style="font-weight: 600; margin-bottom: 0.25rem;">Roles</legend>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin: 0 0 1rem;">
+                    Everyone is a Member. Tick any extra roles they should have when they accept. You can change these later with "Manage roles".
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    {% if viewer_can_manage_owners %}
+                    <div class="form-check">
+                        <input type="checkbox" id="invite-role-owner" name="roles" value="owner" class="form-check-input" onchange="syncInviteRoles()">
+                        <label for="invite-role-owner" style="display: inline; font-weight: normal;">
+                            <strong>Owner</strong>
+                            <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
+                                Billing, deleting the organization, adding and removing Owners, and the audit log. Always also an Organization Admin.
+                            </small>
+                        </label>
+                    </div>
+                    {% else %}
+                    <div id="invite-owner-note" style="display: none; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; font-size: 0.875rem;">
+                        This invitation makes them an <strong>Owner</strong>. Only an Owner can change that. Owners are always Organization Admins.
+                    </div>
+                    {% endif %}
+                    <div class="form-check">
+                        <input type="checkbox" id="invite-role-org-admin" name="roles" value="org_admin" class="form-check-input" onchange="syncInviteRoles()">
+                        <label for="invite-role-org-admin" style="display: inline; font-weight: normal;">
+                            <strong>Organization Admin</strong>
+                            <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
+                                Manages settings, the team and roles, reviewees, and runs review cycles for anyone. Cannot read report content.
+                            </small>
+                        </label>
+                    </div>
+                    <div class="form-check" id="invite-role-cycle-manager-row">
+                        <input type="checkbox" id="invite-role-cycle-manager" name="roles" value="cycle_manager" class="form-check-input">
+                        <label for="invite-role-cycle-manager" style="display: inline; font-weight: normal;">
+                            <strong>Cycle Manager</strong>
+                            <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
+                                Creates and runs review cycles for others and sees completion progress, but not results.
+                            </small>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="invite-role-report-viewer" name="roles" value="report_viewer" class="form-check-input" onchange="syncInviteCampusScope()">
+                        <label for="invite-role-report-viewer" style="display: inline; font-weight: normal;">
+                            <strong>Report Viewer (HR)</strong>
+                            <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
+                                Reads reports for the campuses ticked below. For investigations, can see which reviewer gave which answers (each access is recorded with a reason). Only give this to HR staff.
+                            </small>
+                        </label>
+                    </div>
+                    <fieldset id="invite-campus-scope" style="display: none; margin: -0.25rem 0 0 24px; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 8px;">
+                        <legend style="font-size: 0.875rem; font-weight: 600; padding: 0 0.25rem;">Campuses they can see reports for</legend>
+                        <div class="form-check" style="margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="invite-all-campuses" name="report_all_campuses" class="form-check-input" onchange="syncInviteCampusScope()">
+                            <label for="invite-all-campuses" style="display: inline; font-weight: normal;">
+                                <strong>Select All</strong>
+                                <small style="display: block; color: var(--text-secondary); margin-left: 24px;">
+                                    Every reviewee, including people with no campus and campuses added later.
+                                </small>
+                            </label>
+                        </div>
+                        {% for campus in campuses %}
+                        <div class="form-check">
+                            <input type="checkbox" id="invite-campus-{{ campus.id }}" name="report_campuses" value="{{ campus.id }}" class="form-check-input invite-campus-box" onchange="syncInviteCampusScope()">
+                            <label for="invite-campus-{{ campus.id }}" style="display: inline; font-weight: normal;">{{ campus.name }}</label>
+                        </div>
+                        {% empty %}
+                        <small style="display: block; color: var(--text-secondary);">
+                            No campuses yet. <a href="{% url 'settings' %}#campuses">Add campuses in Settings</a> to limit Report Viewers to particular campuses.
+                        </small>
+                        {% endfor %}
+                        <small id="invite-campus-none-warning" style="display: none; margin-top: 0.5rem; color: #b45309;">
+                            With nothing ticked they can only see their own report.
+                        </small>
+                    </fieldset>
+                </div>
+                <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 1rem; margin-bottom: 0;">
+                    Organization Admins and Report Viewers must enter a code sent to their email each time they sign in.
+                </p>
+            </fieldset>
+            {% endif %}
+
             <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('invite-modal').style.display='none'">Cancel</button>
-                <button type="submit" class="btn btn-primary">Send Invitation</button>
+                <button type="submit" class="btn btn-primary" id="invite-submit">Send Invitation</button>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+function setInviteMode(editing, email) {
+    const form = document.getElementById('invite-form');
+    const emailBox = document.getElementById('email');
+    document.getElementById('invite-modal-title').textContent = editing ? 'Edit invitation' : 'Send Invitation';
+    document.getElementById('invite-submit').textContent = editing ? 'Save roles' : 'Send Invitation';
+    document.getElementById('invite-email-help').textContent = editing
+        ? 'To invite a different address, revoke this invitation and send a new one.'
+        : 'The user will receive an email with instructions to join';
+    emailBox.value = email || '';
+    emailBox.readOnly = editing;
+    emailBox.style.background = editing ? 'var(--bg-secondary)' : '';
+    emailBox.style.color = editing ? 'var(--text-secondary)' : '';
+    if (!editing) { form.action = form.dataset.sendUrl; }
+}
+
+function setInviteOwnerLock(locked) {
+    const adminBox = document.getElementById('invite-role-org-admin');
+    const note = document.getElementById('invite-owner-note');
+    if (adminBox) { adminBox.dataset.ownerLocked = locked ? 'true' : 'false'; }
+    if (note) { note.style.display = locked ? 'block' : 'none'; }
+}
+
+function showInviteModal() {
+    const form = document.getElementById('invite-form');
+    form.reset();
+    setInviteMode(false);
+    const cm = document.getElementById('invite-role-cycle-manager');
+    if (cm) {
+        // Start from the organization's default for new members.
+        cm.checked = {{ default_cycle_manager|yesno:'true,false' }};
+        document.getElementById('invite-all-campuses').checked = true;
+        document.querySelectorAll('.invite-campus-box').forEach(function (box) { box.disabled = false; });
+        setInviteOwnerLock(false);
+        syncInviteRoles();
+        syncInviteCampusScope();
+    }
+    document.getElementById('invite-modal').style.display = 'flex';
+    document.getElementById('email').focus();
+}
+
+function showEditInviteModal(url, email, roles, allCampuses, campusIds) {
+    const form = document.getElementById('invite-form');
+    form.reset();
+    setInviteMode(true, email);
+    form.action = url;
+    const has = function (r) { return roles.indexOf(r) !== -1; };
+    const ownerBox = document.getElementById('invite-role-owner');
+    if (ownerBox) { ownerBox.checked = has('owner'); }
+    setInviteOwnerLock(!ownerBox && has('owner'));
+    document.getElementById('invite-role-org-admin').checked = has('org_admin') || has('owner');
+    document.getElementById('invite-role-cycle-manager').checked = has('cycle_manager');
+    document.getElementById('invite-role-report-viewer').checked = has('report_viewer');
+    document.getElementById('invite-all-campuses').checked = allCampuses;
+    document.querySelectorAll('.invite-campus-box').forEach(function (box) {
+        box.disabled = false;
+        box.checked = campusIds.indexOf(parseInt(box.value, 10)) !== -1;
+    });
+    syncInviteRoles();
+    syncInviteCampusScope();
+    document.getElementById('invite-modal').style.display = 'flex';
+}
+
+function syncInviteRoles() {
+    const ownerBox = document.getElementById('invite-role-owner');
+    const adminBox = document.getElementById('invite-role-org-admin');
+    // An Owner is always an Organization Admin.
+    const isOwner = ownerBox ? ownerBox.checked : adminBox.dataset.ownerLocked === 'true';
+    if (isOwner) { adminBox.checked = true; }
+    // Disabled boxes aren't submitted; the server adds Organization Admin for Owners.
+    adminBox.disabled = isOwner;
+    // Organization Admins can already run cycles, so Cycle Manager is hidden for them.
+    const cmRow = document.getElementById('invite-role-cycle-manager-row');
+    const cm = document.getElementById('invite-role-cycle-manager');
+    cmRow.style.display = adminBox.checked ? 'none' : '';
+    if (adminBox.checked) { cm.checked = false; }
+}
+
+function syncInviteCampusScope() {
+    const viewer = document.getElementById('invite-role-report-viewer').checked;
+    const all = document.getElementById('invite-all-campuses');
+    const boxes = Array.from(document.querySelectorAll('.invite-campus-box'));
+    document.getElementById('invite-campus-scope').style.display = viewer ? 'block' : 'none';
+    // Select All covers every campus (and future ones), so tick and lock the list.
+    boxes.forEach(function (box) {
+        if (all.checked) { box.checked = true; }
+        box.disabled = all.checked;
+    });
+    const anyTicked = all.checked || boxes.some(function (box) { return box.checked; });
+    document.getElementById('invite-campus-none-warning').style.display = (viewer && !anyTicked) ? 'block' : 'none';
+}
+</script>
 
 <!-- Active Users -->
 <div class="card mb-2">
@@ -190,7 +365,7 @@
 <!-- Pending Invitations -->
 <div class="card">
     <div class="card-header">
-        <h2 class="card-title">Pending Invitations ({{ invitations.count }})</h2>
+        <h2 class="card-title">Pending Invitations ({{ invitations|length }})</h2>
     </div>
     <div class="card-body">
         {% if invitations %}
@@ -200,16 +375,19 @@
                 <thead>
                     <tr>
                         <th>Email</th>
+                        <th>Roles</th>
                         <th>Invited By</th>
                         <th>Sent</th>
                         <th>Expires</th>
                         <th>Status</th>
+                        {% if perms.accounts.can_invite_members %}<th>Actions</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
                     {% for invitation in invitations %}
                     <tr>
                         <td>{{ invitation.email }}</td>
+                        <td>{% for label in invitation.role_labels %}<span class="badge" style="background: #374151; color: white; margin-right: 2px;">{{ label }}{% if label == 'Report Viewer' and campuses or label == 'Report Viewer' and not invitation.report_all_campuses %} &middot; {% if invitation.report_all_campuses %}All campuses{% elif invitation.report_campus_names %}{{ invitation.report_campus_names|join:', ' }}{% else %}No campuses{% endif %}{% endif %}</span>{% empty %}<span class="badge" style="background: #6b7280; color: white;">Member</span>{% endfor %}</td>
                         <td>{{ invitation.invited_by.username }}</td>
                         <td>{{ invitation.created_at|date:"M d, Y" }}</td>
                         <td>{{ invitation.expires_at|date:"M d, Y" }}</td>
@@ -220,6 +398,25 @@
                                 <span class="badge" style="background: #dc2626; color: white;">Expired</span>
                             {% endif %}
                         </td>
+                        {% if perms.accounts.can_invite_members %}<td>
+                            {% if perms.accounts.can_invite_members %}
+                            <div class="invite-actions" style="display: flex; gap: 0.375rem; flex-wrap: wrap;">
+                                {% if perms.accounts.can_manage_organization %}
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="showEditInviteModal('{% url 'update_invitation' invitation.pk %}', '{{ invitation.email|escapejs }}', {{ invitation.roles_json }}, {{ invitation.report_all_campuses|yesno:'true,false' }}, {{ invitation.report_campus_ids_json }})">Edit</button>
+                                {% endif %}
+                                <form method="post" action="{% url 'resend_invitation' invitation.pk %}" style="margin: 0;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-secondary" title="Email the invitation again and extend it by 7 days">Resend</button>
+                                </form>
+                                {% if not invitation.grants_owner or viewer_can_manage_owners %}
+                                <form method="post" action="{% url 'revoke_invitation' invitation.pk %}" style="margin: 0;" onsubmit="return confirm('Revoke the invitation for {{ invitation.email|escapejs }}? Their invitation link will stop working.');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </td>{% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -242,6 +439,10 @@
                 </div>
                 <div class="mobile-card-body">
                     <div class="mobile-card-row">
+                        <span class="mobile-card-label">Roles</span>
+                        <span style="text-align: right;">{% for label in invitation.role_labels %}<span class="badge" style="background: #374151; color: white; margin-right: 2px;">{{ label }}{% if label == 'Report Viewer' and campuses or label == 'Report Viewer' and not invitation.report_all_campuses %} &middot; {% if invitation.report_all_campuses %}All campuses{% elif invitation.report_campus_names %}{{ invitation.report_campus_names|join:', ' }}{% else %}No campuses{% endif %}{% endif %}</span>{% empty %}<span class="badge" style="background: #6b7280; color: white;">Member</span>{% endfor %}</span>
+                    </div>
+                    <div class="mobile-card-row">
                         <span class="mobile-card-label">Invited By</span>
                         <span>{{ invitation.invited_by.username }}</span>
                     </div>
@@ -252,6 +453,25 @@
                     <div class="mobile-card-row">
                         <span class="mobile-card-label">Expires</span>
                         <span>{{ invitation.expires_at|date:"M d, Y" }}</span>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                    {% if perms.accounts.can_invite_members %}
+                            <div class="invite-actions" style="display: flex; gap: 0.375rem; flex-wrap: wrap;">
+                                {% if perms.accounts.can_manage_organization %}
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="showEditInviteModal('{% url 'update_invitation' invitation.pk %}', '{{ invitation.email|escapejs }}', {{ invitation.roles_json }}, {{ invitation.report_all_campuses|yesno:'true,false' }}, {{ invitation.report_campus_ids_json }})">Edit</button>
+                                {% endif %}
+                                <form method="post" action="{% url 'resend_invitation' invitation.pk %}" style="margin: 0;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-secondary" title="Email the invitation again and extend it by 7 days">Resend</button>
+                                </form>
+                                {% if not invitation.grants_owner or viewer_can_manage_owners %}
+                                <form method="post" action="{% url 'revoke_invitation' invitation.pk %}" style="margin: 0;" onsubmit="return confirm('Revoke the invitation for {{ invitation.email|escapejs }}? Their invitation link will stop working.');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            {% endif %}
                     </div>
                 </div>
             </div>

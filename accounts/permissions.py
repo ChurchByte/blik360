@@ -242,6 +242,68 @@ def assign_organization_member(user, can_create_cycles_for_others=False):
     return set_user_roles(user, roles)
 
 
+def roles_grantable_by(user):
+    """
+    Roles this user may hand out (on the Team page or when inviting):
+    Owners can grant every role, Organization Admins every role but Owner,
+    and anyone else none.
+    """
+    if can_manage_owners(user):
+        return list(OWNER_ASSIGNABLE_ROLES)
+    if can_manage_organization(user):
+        return list(ASSIGNABLE_ROLES)
+    return []
+
+
+def normalize_roles(roles):
+    """
+    Apply the role rules to a requested set: an Owner is always an
+    Organization Admin, and Organization Admins can already run cycles, so the
+    separate Cycle Manager role is dropped for them.
+    """
+    roles = set(roles)
+    if OWNER in roles:
+        roles.add(ORG_ADMIN)
+    if ORG_ADMIN in roles:
+        roles.discard(CYCLE_MANAGER)
+    return roles
+
+
+def invitation_roles(invitation):
+    """
+    The roles an invitation grants. Invitations created before roles could be
+    chosen (roles is None) fall back to the organization's default: Member,
+    plus Cycle Manager when "users can create cycles" is on.
+    """
+    if invitation.roles is None:
+        org = invitation.organization
+        return {CYCLE_MANAGER} if getattr(org, 'default_users_can_create_cycles', False) else set()
+    return normalize_roles(r for r in invitation.roles if r in ROLE_GROUPS)
+
+
+def apply_invitation_roles(user, invitation):
+    """
+    Give a user who has just joined from `invitation` the roles (and Report
+    Viewer campus scope) chosen when they were invited. Someone who is already
+    an Owner keeps ownership. The user's profile must already exist.
+
+    Returns the user's new set of roles.
+    """
+    roles = invitation_roles(invitation)
+    if OWNER in get_user_roles(user):
+        roles |= {OWNER, ORG_ADMIN}
+    _, roles = set_user_roles(user, roles)
+    if REPORT_VIEWER in roles and invitation.roles is not None:
+        profile = UserProfile.objects.filter(user=user).first()
+        if profile is not None:
+            set_report_campus_scope(
+                profile,
+                invitation.report_all_campuses,
+                invitation.report_campuses.values_list('id', flat=True),
+            )
+    return roles
+
+
 def remove_from_all_org_groups(user):
     """Remove user from all role and member groups (without deleting the groups)."""
     user.groups.remove(*Group.objects.filter(

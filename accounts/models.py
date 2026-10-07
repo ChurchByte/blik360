@@ -138,6 +138,22 @@ class OrganizationInvitation(TimeStampedModel):
     )
     accepted_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField()
+    # Roles to grant when the invitation is accepted (see accounts/permissions.py).
+    # None means the invitation predates role selection: the new member gets the
+    # organization's default (Member, plus Cycle Manager if the organization's
+    # "users can create cycles" default is on).
+    roles = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Role keys granted on acceptance, e.g. ["org_admin", "report_viewer"]'
+    )
+    # Report Viewer campus scope to apply on acceptance (ignored without that role).
+    report_all_campuses = models.BooleanField(default=True)
+    report_campuses = models.ManyToManyField(
+        'Campus',
+        blank=True,
+        related_name='pending_invitations',
+    )
 
     objects = OrganizationManager()
 

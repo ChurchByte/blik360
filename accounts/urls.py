@@ -14,5 +14,8 @@ urlpatterns = [
     path('forgot-password/', views.forgot_password_view, name='forgot_password'),
     path('reset-password/<str:token>/', views.reset_password_view, name='reset_password'),
     path('invite/', invitation_views.send_invitation, name='send_invitation'),
+    path('invite/pending/<int:pk>/edit/', invitation_views.update_invitation, name='update_invitation'),
+    path('invite/pending/<int:pk>/resend/', invitation_views.resend_invitation, name='resend_invitation'),
+    path('invite/pending/<int:pk>/revoke/', invitation_views.revoke_invitation, name='revoke_invitation'),
     path('invite/<str:token>/', invitation_views.accept_invitation, name='accept_invitation'),
 ]

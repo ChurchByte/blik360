@@ -137,12 +137,9 @@ def signup_view(request):
             can_create_cycles_for_others=invitation.organization.default_users_can_create_cycles
         )
 
-        # Assign organization member permissions (Django permission system)
-        from accounts.permissions import assign_organization_member
-        assign_organization_member(
-            user,
-            can_create_cycles_for_others=invitation.organization.default_users_can_create_cycles
-        )
+        # Give them the roles chosen when they were invited
+        from accounts.permissions import apply_invitation_roles
+        apply_invitation_roles(user, invitation)
 
         # Mark invitation as accepted
         invitation.accepted_at = timezone.now()

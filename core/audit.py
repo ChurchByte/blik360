@@ -28,6 +28,9 @@ class Actions:
     OWNERSHIP_TRANSFERRED = 'team.ownership_transferred'
     MEMBER_INVITED = 'team.member_invited'
     INVITATION_ACCEPTED = 'team.invitation_accepted'
+    INVITATION_UPDATED = 'team.invitation_updated'
+    INVITATION_RESENT = 'team.invitation_resent'
+    INVITATION_REVOKED = 'team.invitation_revoked'
 
     # Reports and responses
     REPORT_VIEWED = 'report.viewed'
@@ -71,6 +74,9 @@ ACTION_LABELS = {
     Actions.OWNERSHIP_TRANSFERRED: 'Ownership transferred',
     Actions.MEMBER_INVITED: 'Member invited',
     Actions.INVITATION_ACCEPTED: 'Invitation accepted',
+    Actions.INVITATION_UPDATED: 'Invitation roles changed',
+    Actions.INVITATION_RESENT: 'Invitation resent',
+    Actions.INVITATION_REVOKED: 'Invitation revoked',
     Actions.REPORT_VIEWED: 'Report viewed',
     Actions.REPORT_GENERATED: 'Report generated',
     Actions.REPORT_EMAILED: 'Report emailed to reviewee',
