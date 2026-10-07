@@ -105,9 +105,14 @@ def feedback_form(request, token):
 
     # Get existing responses for this token
     existing_responses = {}
+    not_observed_ids = {}
     if request.method == 'GET':
         responses = Response.objects.filter(token=reviewer_token).select_related('question')
-        existing_responses = {str(r.question.id): r.answer_data.get('value') for r in responses}
+        for r in responses:
+            if (r.answer_data or {}).get('not_observed'):
+                not_observed_ids[str(r.question.id)] = True
+            else:
+                existing_responses[str(r.question.id)] = r.answer_data.get('value')
 
     # Get invitation token for localStorage key
     invitation_token = cycle.get_invitation_token(reviewer_token.category)
@@ -119,6 +124,8 @@ def feedback_form(request, token):
         'sections': sections,
         'reviewee': cycle.reviewee,
         'existing_responses': existing_responses,
+        'not_observed_ids': not_observed_ids,
+        'allow_not_observed': reviewer_token.category != 'self',
         'invitation_token': invitation_token,
         'organization': cycle.reviewee.organization,
         'min_responses': cycle.reviewee.organization.min_responses_for_anonymity,
@@ -154,6 +161,18 @@ def submit_feedback(request, token):
     # Validate and prepare responses
     for question in questions:
         field_name = f'question_{question.id}'
+
+        # "Unable to observe": stored as a marker and excluded from all results.
+        # Not offered on self-assessments.
+        if reviewer_token.category != 'self' and request.POST.get(f'not_observed_{question.id}'):
+            responses_to_save.append({
+                'cycle': cycle,
+                'question': question,
+                'token': reviewer_token,
+                'category': reviewer_token.category,
+                'answer_data': {'value': None, 'not_observed': True},
+            })
+            continue
 
         # Handle multiple_choice differently (get list of values)
         if question.question_type == 'multiple_choice':

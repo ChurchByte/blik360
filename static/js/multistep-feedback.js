@@ -256,10 +256,41 @@ document.addEventListener('DOMContentLoaded', function() {
         saveTimeout = setTimeout(saveDraft, 1000); // Save 1 second after user stops typing
     }
 
+    // "Unable to observe": disable the question's answer inputs (disabled inputs
+    // are neither validated nor submitted). Values are kept so unticking restores them.
+    function applyNotObserved(checkbox) {
+        const question = checkbox.closest('.question');
+        if (!question) return;
+        const notObserved = checkbox.checked;
+        question.classList.toggle('is-not-observed', notObserved);
+        question.querySelectorAll('input, select, textarea').forEach(input => {
+            if (input === checkbox || input.classList.contains('multiple-choice-validator')) return;
+            input.disabled = notObserved;
+        });
+    }
+
+    function isQuestionNotObserved(element) {
+        const question = element.closest('.question');
+        const checkbox = question && question.querySelector('.not-observed-checkbox');
+        return !!(checkbox && checkbox.checked);
+    }
+
+    if (form) {
+        form.addEventListener('change', function(e) {
+            if (e.target.classList && e.target.classList.contains('not-observed-checkbox')) {
+                applyNotObserved(e.target);
+            }
+        });
+    }
+
     async function initialize() {
         if (form && feedbackToken) {
             // Load existing draft on page load
             await loadDraft();
+        }
+
+        if (form) {
+            form.querySelectorAll('.not-observed-checkbox').forEach(applyNotObserved);
         }
 
         // Show the appropriate step (will be updated by loadDraft if applicable)
@@ -295,6 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const requiredInputs = section.querySelectorAll('[required]');
 
         for (let input of requiredInputs) {
+            if (input.disabled || isQuestionNotObserved(input)) continue;
             if (input.type === 'radio') {
                 const radioGroup = section.querySelectorAll(`[name="${input.name}"]`);
                 const isChecked = Array.from(radioGroup).some(radio => radio.checked);
@@ -316,6 +348,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check multiple choice validators (for checkbox groups)
         const multipleChoiceValidators = section.querySelectorAll('.multiple-choice-validator[data-required="true"]');
         for (let validator of multipleChoiceValidators) {
+            if (isQuestionNotObserved(validator)) continue;
             const questionId = validator.dataset.questionId;
             const checkboxes = section.querySelectorAll(`input[type="checkbox"][name="question_${questionId}"]`);
             const isAnyChecked = Array.from(checkboxes).some(cb => cb.checked);

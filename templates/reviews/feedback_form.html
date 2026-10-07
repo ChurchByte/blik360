@@ -64,7 +64,7 @@
                 </div>
 
                 {% for question in section.questions.all %}
-                <div class="question">
+                <div class="question{% if allow_not_observed and not_observed_ids|get_item:question.id %} is-not-observed{% endif %}" data-question-id="{{ question.id }}">
                     <div class="question-text">
                         {{ question.question_text|personalize:reviewee.name }}
                         {% if question.required %}<span class="required">*</span>{% endif %}
@@ -185,6 +185,20 @@
                             <span>{{ question.config.max }}</span>
                         </div>
                     </div>
+                    {% endif %}
+
+                    {% if allow_not_observed %}
+                    <label class="not-observed-option">
+                        <input
+                            type="checkbox"
+                            name="not_observed_{{ question.id }}"
+                            value="1"
+                            class="not-observed-checkbox"
+                            data-question-id="{{ question.id }}"
+                            {% if not_observed_ids|get_item:question.id %}checked{% endif %}
+                        >
+                        <span>I'm unable to observe this</span>
+                    </label>
                     {% endif %}
                 </div>
                 {% endfor %}

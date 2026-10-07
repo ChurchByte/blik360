@@ -519,7 +519,14 @@ def generate_report(cycle):
         })
     })
 
+    # "Unable to observe" answers are excluded from all results; only a total count is kept
+    not_observed_counts = defaultdict(int)
+
     for response in responses:
+        if (response.answer_data or {}).get('not_observed'):
+            not_observed_counts[response.question_id] += 1
+            continue
+
         section = response.question.section
         question = response.question
 
@@ -574,6 +581,7 @@ def generate_report(cycle):
                 'question_type': question_data['question_type'],
                 'question_config': question_data['question_config'],  # Include config for labels, scales, etc.
                 'category_order': present_categories,  # Explicit ordering
+                'not_observed_count': not_observed_counts.get(question_id, 0),
                 'by_category': {}
             }
 
