@@ -1,0 +1,13 @@
+{% extends 'base_public.html' %}
+
+{% block title %}Page not found - Lead360{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-header">
+        <h1>Page not found</h1>
+        <p>The page you're looking for doesn't exist or has moved.</p>
+    </div>
+    <a href="{% url 'home' %}" class="btn-primary" style="display:block;text-align:center;text-decoration:none;">Go to Lead360</a>
+</div>
+{% endblock %}

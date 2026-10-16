@@ -2,7 +2,7 @@
 URL configuration for blik project.
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, re_path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from . import views, admin_views, seo_views, superuser_views
@@ -17,7 +17,6 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('health/', views.health_check, name='health_check'),
     path('license/', views.license_page, name='license'),
-    path('sitemap.xml', seo_views.sitemap, name='sitemap'),
     path('robots.txt', seo_views.robots, name='robots'),
     path('branding/<int:org_id>/<str:kind>/', core_views.organization_brand_image, name='organization_brand_image'),
     path('admin/', admin.site.urls),
@@ -89,13 +88,15 @@ urlpatterns = [
     path('account/', include('blik.account_urls')),
     path('', include('reviews.urls')),
     path('', include('reports.urls')),
-    path('landing/', include('landing.urls')),
+    # Former marketing site (removed). 410 Gone tells search engines the
+    # pages are permanently removed so they drop out of the index faster.
+    re_path(r'^landing(?:/.*)?$', seo_views.gone, name='landing_gone'),
     path('api/', include('subscriptions.urls')),
 
     # REST API v1
     path('api/v1/', include(('api.urls', 'api'), namespace='api')),
 
-    # Public API for landing pages
+    # Public product-review aggregate API (formerly used by the marketing site)
     path('api/reviews/aggregate', review_api.aggregate_reviews_api, name='api_reviews_aggregate'),
 ]
 

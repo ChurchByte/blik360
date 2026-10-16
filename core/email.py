@@ -138,9 +138,6 @@ def send_welcome_email(user, organization, password=None):
     # Build login URL
     login_url = f'{settings.SITE_PROTOCOL}://{settings.SITE_DOMAIN}{reverse("login")}'
 
-    # Build Dreyfus model URL
-    dreyfus_url = f'{settings.SITE_PROTOCOL}://{settings.SITE_DOMAIN}/landing/dreyfus-model/'
-
     # Get active facts from database
     active_facts = list(WelcomeEmailFact.objects.filter(is_active=True))
 
@@ -176,7 +173,6 @@ def send_welcome_email(user, organization, password=None):
         'user': user,
         'password': password,
         'login_url': login_url,
-        'dreyfus_url': dreyfus_url,
         'site_name': settings.SITE_NAME,
         'fact_title': selected_fact['title'],
         'fact_content': selected_fact['content'],

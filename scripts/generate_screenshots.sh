@@ -150,7 +150,7 @@ ls -lh "$SCREENSHOT_DIR" | tail -n +2
 echo ""
 echo "Next steps:"
 echo "1. Review screenshots: open $SCREENSHOT_DIR"
-echo "2. Test landing page: http://localhost:8000/landing/"
+echo "2. Test dashboard: http://localhost:8000/dashboard/"
 echo "3. Commit changes:"
 echo "   git add static/img/screenshots/"
 echo "   git commit -m 'Update landing page screenshots'"

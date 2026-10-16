@@ -76,13 +76,15 @@ INSTALLED_APPS = [
     'reviews',
     'reports',
     'notifications',
-    'landing',
     'subscriptions',
     'productreviews',
     'api',
 ]
 
 MIDDLEWARE = [
+    # First, so X-Robots-Tag wraps every response - including static files
+    # served by WhiteNoise and responses short-circuited by later middleware.
+    'core.middleware.NoIndexMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -112,8 +114,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'landing.context_processors.url_namespace',
-                'landing.context_processors.organization_metadata',
                 'blik.context_processors.stripe_settings',
                 'blik.context_processors.branding',
                 'blik.context_processors.product_info',
@@ -305,7 +305,14 @@ STRIPE_WEBHOOK_SECRET = env('STRIPE_WEBHOOK_SECRET', default='')
 STRIPE_PRICE_ID_SAAS = env('STRIPE_PRICE_ID_SAAS', default='')
 STRIPE_PRICE_ID_ENTERPRISE = env('STRIPE_PRICE_ID_ENTERPRISE', default='')
 
-# CORS settings - allow landing page to call main app API
+# Search engines: every response carries `X-Robots-Tag: noindex` (see
+# core.middleware.NoIndexMiddleware). Crawling stays allowed by default so
+# search engines can re-fetch pages, see the noindex and drop them. Once
+# the site has fallen out of the index, set SEARCH_ENGINES_BLOCK_CRAWLING=True
+# to also serve `Disallow: /` in robots.txt.
+SEARCH_ENGINES_BLOCK_CRAWLING = env.bool('SEARCH_ENGINES_BLOCK_CRAWLING', default=False)
+
+# CORS settings - allow cross-origin calls to the public API
 # Default to deriving from ALLOWED_HOSTS with site protocol
 _cors_origins = env.list('CORS_ALLOWED_ORIGINS', default=None)
 if _cors_origins is None:
@@ -315,7 +322,7 @@ else:
     CORS_ALLOWED_ORIGINS = _cors_origins
 CORS_ALLOW_CREDENTIALS = False
 
-# Main app URL - used by landing app to make API calls
+# Main app URL - used for Stripe checkout redirects
 MAIN_APP_URL = env('MAIN_APP_URL', default=f'{SITE_PROTOCOL}://app.{SITE_DOMAIN}')
 
 # Logging configuration - ensures logs go to stdout for gunicorn
