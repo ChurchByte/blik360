@@ -93,6 +93,6 @@ ls -lh "$SCREENSHOT_DIR" | grep -E '\.(png|webp)$' | tail -20
 echo ""
 echo "Next steps:"
 echo "1. Review: open $SCREENSHOT_DIR"
-echo "2. Test: http://localhost:8000/landing/"
+echo "2. Test dashboard: http://localhost:8000/dashboard/"
 echo "3. Commit: git add static/img/screenshots/ && git commit -m 'Update screenshots'"
 echo ""

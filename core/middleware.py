@@ -30,7 +30,6 @@ class SetupMiddleware:
             '/static/',
             '/health/',
             '/api/',  # Stripe webhooks
-            '/landing/',  # Landing pages
             '/license/',  # License & Credits (AGPL notices)
         ]
 
@@ -70,7 +69,6 @@ class OrganizationMiddleware:
             '/api/stripe/webhook/',
             '/static/',
             '/media/',
-            '/landing/',
             '/accounts/',
             '/license/',
         ]
@@ -90,3 +88,23 @@ class OrganizationMiddleware:
                 print(f"Error getting organization for user {request.user}: {e}")
 
         return self.get_response(request)
+
+
+class NoIndexMiddleware:
+    """
+    Keep the whole site out of search engines.
+
+    Adds `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet` to every
+    response (HTML pages, JSON, PDFs, images served by Django and error pages),
+    so search engines that crawl any URL are told not to index it and to drop
+    it if it is already indexed.
+    """
+    HEADER_VALUE = 'noindex, nofollow, noarchive, nosnippet'
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response['X-Robots-Tag'] = self.HEADER_VALUE
+        return response

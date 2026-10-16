@@ -60,7 +60,7 @@ def create_checkout_session(request):
             }],
             mode='subscription',
             success_url=f'{base_url}/api/stripe/checkout-success/?session_id={{CHECKOUT_SESSION_ID}}',
-            cancel_url=f'{base_url}/landing/signup/?canceled=true',
+            cancel_url=f'{base_url}/?canceled=true',
             subscription_data={
                 'trial_period_days': 14,
             },
